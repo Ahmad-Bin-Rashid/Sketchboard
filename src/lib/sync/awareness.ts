@@ -177,6 +177,7 @@ export class AwarenessManager {
       const { user, cursor, isActive } = awarenessState;
 
       collaborators.push({
+        clientId,
         userId: user.id,
         name: user.name,
         avatarUrl: user.avatarUrl,
@@ -186,6 +187,7 @@ export class AwarenessManager {
 
       if (cursor) {
         cursors.push({
+          clientId,
           userId: user.id,
           name: user.name,
           avatarUrl: user.avatarUrl,

@@ -6,7 +6,7 @@
  * Shows:
  * - Back button to dashboard
  * - Board name (editable in Phase 6)
- * - Live collaborator count (from Yjs awareness)
+ * - Live collaborator avatars (ActiveUsersPanel)
  * - Connection status dot
  * - Share button (Phase 7)
  */
@@ -14,7 +14,6 @@
 import Link from "next/link";
 import {
   ArrowLeft,
-  Users,
   Share2,
   Wifi,
   WifiOff,
@@ -22,6 +21,8 @@ import {
 import { ROUTES } from "@/lib/constants";
 import { type ConnectionStatus, getConnectionDotColor } from "@/lib/sync/connection";
 import { cn } from "@/lib/utils";
+import { ActiveUsersPanel } from "./active-users-panel";
+import type { CollaboratorInfo } from "@/types";
 
 interface BoardHeaderProps {
   boardId: string;
@@ -30,6 +31,8 @@ interface BoardHeaderProps {
   peerCount: number;
   /** Current WebSocket connection status */
   connectionStatus: ConnectionStatus;
+  /** List of active collaborators (from useActiveUsers) */
+  collaborators?: CollaboratorInfo[];
 }
 
 export function BoardHeader({
@@ -37,11 +40,12 @@ export function BoardHeader({
   boardName,
   peerCount,
   connectionStatus,
+  collaborators = [],
 }: BoardHeaderProps) {
   const isConnected = connectionStatus === "connected";
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[300] flex items-start justify-between p-3">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[200] flex items-start justify-between p-3">
       {/* Left: Back + board name */}
       <div className="pointer-events-auto flex items-center gap-2">
         <Link
@@ -62,7 +66,7 @@ export function BoardHeader({
 
       {/* Right: Connection + Collaborators + Share */}
       <div className="pointer-events-auto flex items-center gap-2">
-        {/* Connection + Collaborator count */}
+        {/* Connection status pill */}
         <div
           className="flex items-center gap-2 rounded-lg bg-panel-bg px-3 py-1.5 shadow-sm backdrop-blur-sm"
           style={{ border: "1px solid var(--panel-border)" }}
@@ -76,22 +80,23 @@ export function BoardHeader({
             )}
           />
 
-          {/* Peer count */}
-          <div className="flex items-center gap-1">
-            {isConnected ? (
-              <Wifi className="h-3 w-3 text-muted-foreground" />
-            ) : (
-              <WifiOff className="h-3 w-3 text-muted-foreground" />
-            )}
-          </div>
-
-          <div className="h-3.5 w-px bg-border" />
-
-          <Users className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">
-            {Math.max(1, peerCount)}
-          </span>
+          {/* Wifi icon */}
+          {isConnected ? (
+            <Wifi className="h-3 w-3 text-muted-foreground" />
+          ) : (
+            <WifiOff className="h-3 w-3 text-muted-foreground" />
+          )}
         </div>
+
+        {/* Active collaborator avatars */}
+        {collaborators.length > 0 && (
+          <div
+            className="rounded-lg bg-panel-bg px-2 py-1 shadow-sm backdrop-blur-sm"
+            style={{ border: "1px solid var(--panel-border)" }}
+          >
+            <ActiveUsersPanel collaborators={collaborators} maxVisible={5} />
+          </div>
+        )}
 
         {/* Share button — placeholder for Phase 7 */}
         <button

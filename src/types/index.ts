@@ -61,6 +61,8 @@ export interface BoardWithMeta extends Board {
 // ─── Collaboration / Presence ────────────────────────────────────────────────
 
 export interface CursorPresence {
+  /** Unique awareness client ID (unique per connection, unlike userId) */
+  clientId: number;
   userId: string;
   name: string;
   avatarUrl: string | null;
@@ -70,6 +72,8 @@ export interface CursorPresence {
 }
 
 export interface CollaboratorInfo {
+  /** Unique awareness client ID (unique per connection, unlike userId) */
+  clientId: number;
   userId: string;
   name: string;
   avatarUrl: string | null;
