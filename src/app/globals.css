@@ -1,26 +1,236 @@
 @import "tailwindcss";
 
+/*
+ * Calm & Natural design tokens.
+ * Earthy, warm palette inspired by stone, sage, and warm neutrals.
+ * Tailwind v4 uses @theme for extending the design system.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surface colors — warm stone tones */
+  --background: #faf9f7;
+  --foreground: #1c1917;
+  --surface: #f5f3f0;
+  --surface-hover: #edeae6;
+  --border: #e0ddd8;
+
+  /* Brand — warm sage green */
+  --primary: #5b8a72;
+  --primary-foreground: #ffffff;
+  --primary-hover: #4a7a62;
+  --primary-light: #e8f0ec;
+
+  /* Secondary — warm amber accent */
+  --secondary: #b8860b;
+  --secondary-foreground: #ffffff;
+  --secondary-light: #fdf6e3;
+
+  /* Semantic */
+  --destructive: #c45c5c;
+  --destructive-foreground: #ffffff;
+  --success: #5b8a72;
+  --success-foreground: #ffffff;
+  --warning: #c9953c;
+  --warning-foreground: #ffffff;
+  --muted: #a8a29e;
+  --muted-foreground: #78716c;
+
+  /* Sidebar — deep warm tones */
+  --sidebar-bg: #292524;
+  --sidebar-foreground: #e7e5e4;
+  --sidebar-hover: #3d3836;
+  --sidebar-active: #44403c;
+  --sidebar-accent: #5b8a72;
+
+  /* Canvas */
+  --canvas-bg: #f9f8f6;
+  --canvas-grid: #e8e5e0;
+  --canvas-selection: #5b8a72;
+
+  /* Card & panels */
+  --card: #ffffff;
+  --card-hover: #faf9f7;
+  --card-border: #e7e5e4;
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-border: rgba(0, 0, 0, 0.06);
+
+  /* Shadows — warm tinted */
+  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md: 0 4px 12px rgba(28, 25, 23, 0.06);
+  --shadow-lg: 0 8px 24px rgba(28, 25, 23, 0.08);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1a1816;
+    --foreground: #e7e5e4;
+    --surface: #231f1d;
+    --surface-hover: #2e2a27;
+    --border: #3d3836;
+
+    --primary: #6d9b83;
+    --primary-foreground: #ffffff;
+    --primary-hover: #5b8a72;
+    --primary-light: #1e2e26;
+
+    --secondary: #d4a23a;
+    --secondary-foreground: #ffffff;
+    --secondary-light: #2a2314;
+
+    --destructive: #d47070;
+    --destructive-foreground: #ffffff;
+    --success: #6d9b83;
+    --warning: #d4a23a;
+    --muted: #57534e;
+    --muted-foreground: #a8a29e;
+
+    --sidebar-bg: #12110f;
+    --sidebar-foreground: #e7e5e4;
+    --sidebar-hover: #1e1c1a;
+    --sidebar-active: #292524;
+    --sidebar-accent: #6d9b83;
+
+    --canvas-bg: #1a1816;
+    --canvas-grid: #2a2725;
+    --canvas-selection: #6d9b83;
+
+    --card: #231f1d;
+    --card-hover: #2e2a27;
+    --card-border: #3d3836;
+    --panel-bg: rgba(35, 31, 29, 0.95);
+    --panel-border: rgba(255, 255, 255, 0.06);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-light: var(--secondary-light);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-canvas-bg: var(--canvas-bg);
+  --color-canvas-grid: var(--canvas-grid);
+  --color-canvas-selection: var(--canvas-selection);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-card-border: var(--card-border);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-border: var(--panel-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Base Resets ───────────────────────────────────────────────────────────── */
+
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar Styling ─────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* ─── Canvas ────────────────────────────────────────────────────────────────── */
+
+.whiteboard-canvas {
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+/* ─── tldraw overrides for our palette ──────────────────────────────────────── */
+
+.tl-theme__light {
+  --color-background: var(--canvas-bg) !important;
+  --color-selection-fill: rgba(91, 138, 114, 0.08) !important;
+  --color-selection-stroke: var(--canvas-selection) !important;
+  --color-muted-1: var(--canvas-grid) !important;
+}
+
+.tl-theme__dark {
+  --color-background: var(--canvas-bg) !important;
+  --color-selection-fill: rgba(109, 155, 131, 0.12) !important;
+  --color-selection-stroke: var(--canvas-selection) !important;
+  --color-muted-1: var(--canvas-grid) !important;
+}
+
+/* ─── Animations ────────────────────────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out;
 }
