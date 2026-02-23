@@ -45,7 +45,7 @@ export function BoardHeader({
   const isConnected = connectionStatus === "connected";
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[200] flex items-start justify-between p-3">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[200] flex items-start justify-between p-2">
       {/* Left: Back + board name */}
       <div className="pointer-events-auto flex items-center gap-2">
         <Link

@@ -206,6 +206,33 @@ body {
   --color-muted-1: var(--canvas-grid) !important;
 }
 
+/*
+ * Reposition tldraw's built-in top panels to integrate with our BoardHeader.
+ * - Top-left (page controls, undo/redo): centered horizontally between header.
+ * - Top-right (style/color panel): centered vertically with header's right side.
+ */
+
+
+.tlui-layout__top::before {
+    content: "" !important;
+    flex: 1 !important;
+}
+
+.tlui-layout__top__right {
+  flex: 1 !important;
+  justify-content: center !important;
+}
+
+.tlui-layout__top__left {
+  align-items: center !important;
+  flex: 0 0 auto !important;
+  padding-top: 6px !important;
+}
+
+.tlui-layout__top__left > *:first-child {
+    border-radius: 10px !important;
+}
+
 /* ─── Animations ────────────────────────────────────────────────────────────── */
 
 @keyframes fade-in {
