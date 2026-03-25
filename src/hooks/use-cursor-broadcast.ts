@@ -3,27 +3,27 @@
 /**
  * useCursorBroadcast — broadcasts local cursor position to remote peers.
  *
- * Instead of relying on DOM events (which may not bubble through tldraw's
- * internal canvas), this hook reads the pointer position directly from
- * tldraw's `editor.inputs.currentPagePoint` via the store listener API.
+ * Uses tldraw's editor event system (`editor.on("event", ...)`) instead of
+ * a store listener. The editor event API fires on every pointer interaction
+ * including during active drawing, unlike the session-scope store listener
+ * which only fires on camera/selection changes.
  *
  * Architecture:
- * 1. editor.store.listen (session scope) fires when pointer record changes
- * 2. We read editor.inputs.currentPagePoint (already in page coords!)
- * 3. Throttled broadcast via awarenessManager.updateCursor()
- * 4. pointerleave on editor.getContainer() clears the cursor
- * 5. Idle timer marks user as inactive after IDLE_TIMEOUT_MS
+ * 1. editor.on("event") catches ALL tldraw pointer events (move, drag, draw, etc.)
+ * 2. We extract the current page point from editor.inputs.currentPagePoint
+ * 3. Throttled broadcast via awarenessManager.updateCursor() at ~30fps
+ * 4. pointerleave on the container clears the cursor
+ * 5. Idle timer marks user inactive after IDLE_TIMEOUT_MS with no movement
  *
- * All updates are throttled at ~15fps (66ms) to avoid flooding the network.
- *
- * Usage:
- * ```tsx
- * useCursorBroadcast({ editor, awarenessManager });
- * ```
+ * Why editor.on("event") works during drawing:
+ * - tldraw's tools handle pointer events internally and update editor.inputs
+ * - The "event" callback fires after the tool processes each input event
+ * - editor.inputs.currentPagePoint is always the latest position in page coords
+ * - This runs even when the draw/pencil/arrow tool is active
  */
 
 import { useEffect, useRef } from "react";
-import type { Editor } from "tldraw";
+import type { Editor, TLEventInfo } from "tldraw";
 import type { AwarenessManager } from "@/lib/sync/awareness";
 import { throttle } from "@/lib/sync/cursor-manager";
 import { COLLABORATION } from "@/lib/constants";
@@ -47,12 +47,12 @@ export function useCursorBroadcast({
     let lastX = -Infinity;
     let lastY = -Infinity;
 
-    // Throttled awareness broadcast
+    // Throttled broadcast at 30fps (33ms) — responsive enough to feel live
     const throttledBroadcast = throttle((x: number, y: number) => {
       awarenessManager.updateCursor(x, y);
-    }, COLLABORATION.CURSOR_THROTTLE_MS);
+    }, Math.min(COLLABORATION.CURSOR_THROTTLE_MS, 33));
 
-    // Reset idle timer on movement
+    // Reset idle timer on any movement
     const resetIdleTimer = () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
@@ -60,22 +60,30 @@ export function useCursorBroadcast({
       }, COLLABORATION.IDLE_TIMEOUT_MS);
     };
 
-    // ─── Store listener: fires on session-scope changes (pointer, camera, etc.) ──
+    /**
+     * tldraw editor event handler.
+     *
+     * Fires after every input event processed by the active tool,
+     * including during freehand drawing, dragging shapes, etc.
+     * `editor.inputs.currentPagePoint` is always up to date at this point.
+     */
+    const handleEditorEvent = (_event: TLEventInfo) => {
+      const point = editor.inputs.currentPagePoint;
 
-    const unsubStore = editor.store.listen(
-      () => {
-        const point = editor.inputs.currentPagePoint;
-        if (point.x !== lastX || point.y !== lastY) {
-          lastX = point.x;
-          lastY = point.y;
-          throttledBroadcast(point.x, point.y);
-          resetIdleTimer();
-        }
-      },
-      { source: "user", scope: "session" }
-    );
+      // Only broadcast if position actually changed (avoids redundant broadcasts
+      // for keyboard events, focus events, etc. that don't move the cursor)
+      if (point.x === lastX && point.y === lastY) return;
+      lastX = point.x;
+      lastY = point.y;
 
-    // ─── Pointer leave: clear cursor when mouse exits the canvas ──
+      throttledBroadcast(point.x, point.y);
+      resetIdleTimer();
+    };
+
+    // Subscribe to all tldraw editor events
+    editor.on("event", handleEditorEvent);
+
+    // ─── Pointer leave: clear cursor when mouse exits the canvas ──────
 
     const container = editor.getContainer();
 
@@ -93,10 +101,10 @@ export function useCursorBroadcast({
 
     container.addEventListener("pointerleave", handlePointerLeave);
 
-    // ─── Cleanup ─────────────────────────────────────────────────
+    // ─── Cleanup ───────────────────────────────────────────────────────
 
     return () => {
-      unsubStore();
+      editor.off("event", handleEditorEvent);
       container.removeEventListener("pointerleave", handlePointerLeave);
       throttledBroadcast.cancel();
 

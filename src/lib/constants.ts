@@ -5,8 +5,8 @@
 
 // ─── App Metadata ────────────────────────────────────────────────────────────
 
-export const APP_NAME = "Whiteboard" as const;
-export const APP_DESCRIPTION = "Real-time collaborative whiteboard for teams" as const;
+export const APP_NAME = "SketchBoard" as const;
+export const APP_DESCRIPTION = "Real-time collaborative whiteboard — no sign-up required" as const;
 
 // ─── Route Paths ─────────────────────────────────────────────────────────────
 // Single source of truth for all routes. Use these instead of raw strings.

@@ -105,17 +105,16 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
    */
   const animate = useCallback(() => {
     const map = cursorsRef.current;
-    let anyMoving = false;
 
     map.forEach((state) => {
-      const still = !updateSmoothedCursor(state.smoothed, 0.4);
-      if (!still) anyMoving = true;
+      updateSmoothedCursor(state.smoothed, 0.4);
     });
 
     // Update React state for re-render
     setCursors(new Map(map));
 
-    if (anyMoving) {
+    // Keep looping while there are any cursors (drawing = constant updates)
+    if (map.size > 0) {
       rafRef.current = requestAnimationFrame(animate);
     } else {
       isAnimatingRef.current = false;

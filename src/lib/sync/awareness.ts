@@ -53,6 +53,8 @@ export interface AwarenessManagerOptions {
   userId: string;
   userName: string;
   avatarUrl?: string | null;
+  /** Optional explicit cursor color. Falls back to deterministic color from clientId. */
+  color?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -88,12 +90,12 @@ export class AwarenessManager {
   private changeListeners: Set<() => void> = new Set();
   private isDisposed = false;
 
-  constructor({ awareness, userId, userName, avatarUrl }: AwarenessManagerOptions) {
+  constructor({ awareness, userId, userName, avatarUrl, color }: AwarenessManagerOptions) {
     this.awareness = awareness;
     this.userId = userId;
     this.userName = userName;
     this.avatarUrl = avatarUrl ?? null;
-    this.color = getCursorColor(awareness.clientID);
+    this.color = color ?? getCursorColor(awareness.clientID);
 
     // Set initial local state
     this.setLocalState();

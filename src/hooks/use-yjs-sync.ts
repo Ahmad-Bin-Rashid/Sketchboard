@@ -8,23 +8,15 @@
  * 4. Manages AwarenessManager for cursor/presence broadcasting
  * 5. Tracks connection status in the global store
  *
+ * Two modes:
+ * - "guest": localStorage save/restore; no DB; board state survives reload
+ * - "auth":  DB persistence via PartyKit; no localStorage
+ *
  * Lifecycle:
  * - On mount: connect to PartyKit room, start sync
- * - During use: changes flow bidirectionally in real-time
+ * - Guest mode: restore saved snapshot into tldraw on first sync
+ * - Guest mode: auto-save to localStorage on store changes (debounced 2s)
  * - On unmount: disconnect, dispose all managers, clean up
- *
- * Usage:
- * ```tsx
- * function WhiteboardCanvas({ boardId }: { boardId: string }) {
- *   const { awareness, connectionStatus } = useYjsSync({
- *     boardId,
- *     editor,
- *     userId: "user_123",
- *     userName: "Alice",
- *   });
- *   // awareness and connectionStatus are available for UI
- * }
- * ```
  */
 
 "use client";
@@ -37,8 +29,11 @@ import type { Editor } from "tldraw";
 import { TldrawYjsSync } from "@/lib/sync/tldraw-yjs-sync";
 import { AwarenessManager } from "@/lib/sync/awareness";
 import { useConnectionStore, type ConnectionStatus } from "@/lib/sync/connection";
+import { loadGuestBoard, saveGuestBoard } from "@/lib/local-board-store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+export type WhiteboardMode = "guest" | "auth";
 
 export interface UseYjsSyncOptions {
   /** Board ID — used as the PartyKit room name */
@@ -51,8 +46,17 @@ export interface UseYjsSyncOptions {
   userName: string;
   /** Current user's avatar URL */
   avatarUrl?: string | null;
+  /** Current user's cursor color */
+  userColor?: string;
   /** Whether to enable collaboration (false = local-only mode) */
   enabled?: boolean;
+  /**
+   * "guest": localStorage persistence, no DB
+   * "auth":  DB persistence via PartyKit server callbacks
+   */
+  mode?: WhiteboardMode;
+  /** Current board name (used for localStorage save label in guest mode) */
+  boardName?: string;
 }
 
 export interface UseYjsSyncReturn {
@@ -68,14 +72,8 @@ export interface UseYjsSyncReturn {
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-/**
- * Get the PartyKit host URL from environment variables.
- * Falls back to localhost:1999 for development.
- */
 function getPartyKitHost(): string {
-  return (
-    process.env.NEXT_PUBLIC_PARTYKIT_HOST || "localhost:1999"
-  );
+  return process.env.NEXT_PUBLIC_PARTYKIT_HOST || "localhost:1999";
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -86,13 +84,17 @@ export function useYjsSync({
   userId,
   userName,
   avatarUrl,
+  userColor,
   enabled = true,
+  mode = "guest",
+  boardName = "Untitled Board",
 }: UseYjsSyncOptions): UseYjsSyncReturn {
   // Refs for cleanup-safe access to mutable objects
   const docRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<YPartyKitProvider | null>(null);
   const syncRef = useRef<TldrawYjsSync | null>(null);
   const awarenessManagerRef = useRef<AwarenessManager | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Local state
   const [awarenessManager, setAwarenessManager] =
@@ -111,7 +113,11 @@ export function useYjsSync({
    * Called on unmount or when key deps change.
    */
   const cleanup = useCallback(() => {
-    // Dispose in reverse order of creation
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
     syncRef.current?.dispose();
     syncRef.current = null;
 
@@ -137,7 +143,6 @@ export function useYjsSync({
    * When any of these change, we tear down and rebuild.
    */
   useEffect(() => {
-    // Don't connect until we have an editor instance
     if (!editor || !enabled) {
       cleanup();
       return;
@@ -150,8 +155,6 @@ export function useYjsSync({
     docRef.current = doc;
 
     // 2. Connect to PartyKit via y-partykit WebsocketProvider
-    //    The provider handles: WebSocket connection, Yjs sync protocol,
-    //    reconnection with exponential backoff, awareness transport
     const provider = new YPartyKitProvider(host, boardId, doc, {
       connect: true,
       party: "whiteboard",
@@ -172,42 +175,63 @@ export function useYjsSync({
           break;
       }
     };
-
     provider.on("status", handleStatus);
 
-    // Track sync completion
+    // 4. Handle initial sync
     const handleSync = (synced: boolean) => {
-      if (synced) {
-        setIsSynced(true);
+      if (!synced) return;
+      setIsSynced(true);
 
-        // 4. Create the tldraw ↔ Yjs sync bridge AFTER initial sync
-        if (!syncRef.current) {
-          syncRef.current = new TldrawYjsSync({ doc, editor });
+      // 4a. Restore guest localStorage snapshot BEFORE wiring tldraw sync
+      if (mode === "guest") {
+        const saved = loadGuestBoard(boardId);
+        if (saved) {
+          try {
+            editor.loadSnapshot(saved);
+          } catch {
+            // Snapshot may be incompatible (e.g., tldraw version change) — ignore
+          }
         }
+      }
 
-        // 5. Create awareness manager AFTER initial sync
-        if (!awarenessManagerRef.current) {
-          const manager = new AwarenessManager({
-            awareness: provider.awareness,
-            userId,
-            userName,
-            avatarUrl,
-          });
-          awarenessManagerRef.current = manager;
-          setAwarenessManager(manager);
+      // 4b. Wire tldraw ↔ Yjs sync bridge
+      if (!syncRef.current) {
+        syncRef.current = new TldrawYjsSync({ doc, editor });
+      }
 
-          // Track peer count changes
-          const unsubPeers = manager.onRemoteChange(() => {
-            setPeerCount(manager.getPeerCount());
-          });
+      // 4c. Create awareness manager
+      if (!awarenessManagerRef.current) {
+        const manager = new AwarenessManager({
+          awareness: provider.awareness,
+          userId,
+          userName,
+          avatarUrl,
+          ...(userColor ? { color: userColor } : {}),
+        });
+        awarenessManagerRef.current = manager;
+        setAwarenessManager(manager);
 
-          // Set initial peer count
+        // Track peer count changes
+        const unsubPeers = manager.onRemoteChange(() => {
           setPeerCount(manager.getPeerCount());
+        });
+        setPeerCount(manager.getPeerCount());
+        (manager as unknown as Record<string, unknown>).__unsubPeers = unsubPeers;
+      }
 
-          // Store unsubscribe for cleanup
-          (manager as unknown as Record<string, unknown>).__unsubPeers =
-            unsubPeers;
-        }
+      // 4d. Guest mode: auto-save to localStorage on store changes (debounced 2s)
+      if (mode === "guest") {
+        const unsubStore = editor.store.listen(
+          () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = setTimeout(() => {
+              const snapshot = editor.getSnapshot();
+              saveGuestBoard(boardId, snapshot, boardName);
+            }, 2000);
+          },
+          { source: "all", scope: "document" }
+        );
+        (provider as unknown as Record<string, unknown>).__unsubStore = unsubStore;
       }
     };
 
@@ -223,7 +247,10 @@ export function useYjsSync({
       provider.off("status", handleStatus);
       provider.off("sync", handleSync);
 
-      // Unsubscribe peer count listener
+      const unsubStore = (provider as unknown as Record<string, unknown>)
+        .__unsubStore as (() => void) | undefined;
+      unsubStore?.();
+
       const unsubPeers = (
         awarenessManagerRef.current as unknown as Record<string, unknown>
       )?.__unsubPeers as (() => void) | undefined;
