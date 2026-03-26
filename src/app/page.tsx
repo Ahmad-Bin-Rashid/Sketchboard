@@ -53,8 +53,8 @@ export default function HomePage() {
       <main className="flex flex-1 flex-col items-center justify-center px-6 py-20">
         {/* Background decoration */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-32 right-0 h-[500px] w-[500px] rounded-full bg-primary/[0.04] blur-3xl" />
-          <div className="absolute -bottom-32 left-0 h-[400px] w-[400px] rounded-full bg-secondary/[0.05] blur-3xl" />
+          <div className="absolute -top-32 right-0 h-125 w-125 rounded-full bg-primary/4 blur-3xl" />
+          <div className="absolute -bottom-32 left-0 h-100 w-100 rounded-full bg-secondary/5 blur-3xl" />
         </div>
 
         <div className="relative z-10 w-full max-w-2xl text-center">

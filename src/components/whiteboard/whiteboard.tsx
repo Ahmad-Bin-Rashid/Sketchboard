@@ -192,7 +192,7 @@ export function Whiteboard({
       />
 
       {/* Connection indicator — bottom-left */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[200]">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-200">
         <div className="pointer-events-auto">
           <ConnectionIndicator />
         </div>

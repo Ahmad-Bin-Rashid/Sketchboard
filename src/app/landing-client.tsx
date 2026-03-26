@@ -117,7 +117,7 @@ export function GuestLandingClient() {
                   href={ROUTES.BOARD(board.id)}
                   className="flex min-w-0 flex-1 items-center gap-3"
                 >
-                  <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded bg-surface">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-surface">
                     <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-muted-foreground" fill="currentColor">
                       <path d="M3 2a1 1 0 00-1 1v2a1 1 0 001 1h2a1 1 0 001-1V3a1 1 0 00-1-1H3zm0 7a1 1 0 00-1 1v2a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 00-1-1H3zm6-7a1 1 0 00-1 1v8a1 1 0 001 1h2a1 1 0 001-1V3a1 1 0 00-1-1H9z" />
                     </svg>
@@ -126,7 +126,7 @@ export function GuestLandingClient() {
                     <p className="truncate text-sm font-medium">{board.name}</p>
                     <p className="text-xs text-muted-foreground">{formatRelative(board.savedAt)}</p>
                   </div>
-                  <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
+                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
                 </a>
 
                 <button
@@ -134,7 +134,7 @@ export function GuestLandingClient() {
                     e.preventDefault();
                     handleDelete(board.id);
                   }}
-                  className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                  className="ml-2 shrink-0 rounded p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                   aria-label="Delete local board"
                   title="Remove from local history"
                 >

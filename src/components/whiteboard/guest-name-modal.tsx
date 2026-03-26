@@ -61,7 +61,7 @@ export function GuestNameModal({ onConfirm }: GuestNameModalProps) {
   return (
     <div
       className={cn(
-        "pointer-events-auto fixed inset-0 z-[500] flex items-center justify-center",
+        "pointer-events-auto fixed inset-0 z-500 flex items-center justify-center",
         "bg-background/60 backdrop-blur-sm transition-opacity duration-200",
         visible ? "opacity-100" : "opacity-0"
       )}

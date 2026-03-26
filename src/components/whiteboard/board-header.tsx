@@ -134,7 +134,7 @@ export function BoardHeader({
   };
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[200] flex items-start justify-between p-2">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-200 flex items-start justify-between p-2">
       {/* ─── Left: Nav + Board Name ───────────────────────────── */}
       <div className="pointer-events-auto flex items-center gap-2">
         {/* Back / Home button */}
@@ -177,7 +177,7 @@ export function BoardHeader({
           ) : (
             <h1
               className={cn(
-                "max-w-[200px] truncate text-sm font-medium",
+                "max-w-50 truncate text-sm font-medium",
                 isGuest && "cursor-text select-none"
               )}
               onDoubleClick={handleNameDoubleClick}
@@ -197,10 +197,10 @@ export function BoardHeader({
             title="Click to change your display name"
             aria-label="Change your display name"
           >
-            <span className="max-w-[100px] truncate text-xs text-muted-foreground">
+            <span className="max-w-25 truncate text-xs text-muted-foreground">
               {guestName ?? "Guest"}
             </span>
-            <Pencil className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+            <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/70" />
           </button>
         )}
       </div>

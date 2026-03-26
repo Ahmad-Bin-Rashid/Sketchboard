@@ -194,7 +194,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-[250] overflow-hidden"
+      className="pointer-events-none absolute inset-0 z-250 overflow-hidden"
       aria-hidden="true"
     >
       {Array.from(cursors.values()).map(({ presence, smoothed }) => (
