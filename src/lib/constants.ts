@@ -88,7 +88,8 @@ export const TIERS = {
 // ─── Upload ──────────────────────────────────────────────────────────────────
 
 export const UPLOAD = {
-  MAX_FILE_SIZE_MB: 10,
+  /** Max file size per image upload (must match Uploadthing router maxFileSize) */
+  MAX_FILE_SIZE_MB: 8,
   ACCEPTED_IMAGE_TYPES: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
 } as const;
 

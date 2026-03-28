@@ -10,21 +10,25 @@
  * - Board state auto-saved to localStorage on changes (debounced 2s)
  * - GuestNameModal shown on first visit
  * - Export/import via BoardHeader
+ * - Images: stored as base64 data URLs inline (no CDN)
  *
  * Auth mode ("auth"):
  * - Real userId/userName/avatarUrl from Clerk session (passed via props)
  * - Board state persisted to DB via PartyKit (Phase 8)
  * - Full dashboard access
+ * - Images: uploaded to Uploadthing CDN, recorded in DB
  *
  * Architecture:
  * ┌───────────────────────────────────────────────────────┐
  * │  Whiteboard (this component)                          │
  * │  ├── GuestNameModal (guest, first visit only)         │
  * │  ├── Tldraw (full screen canvas, z-0)                 │
+ * │  │    └── assetStore (guest=base64 / auth=CDN)        │
  * │  ├── RemoteCursors (overlay, z-250)                   │
  * │  │    └── CursorAvatar × N (per remote user)          │
  * │  ├── BoardHeader (floating, z-200)                    │
  * │  │    └── ActiveUsersPanel (stacked avatars)          │
+ * │  ├── UploadToastManager (bottom-right, z-300)         │
  * │  └── ConnectionIndicator (floating, z-200)            │
  * └───────────────────────────────────────────────────────┘
  */
@@ -32,16 +36,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
+import { nanoid } from "nanoid";
 
 import { useYjsSync, type WhiteboardMode } from "@/hooks/use-yjs-sync";
 import { useCursorBroadcast } from "@/hooks/use-cursor-broadcast";
 import { useActiveUsers } from "@/hooks/use-active-users";
 import { getGuestIdentity, hasSetGuestName } from "@/lib/guest";
 import { renameGuestBoard, getGuestBoardMeta } from "@/lib/local-board-store";
+import { useAssetStore } from "@/lib/assets";
 import { BoardHeader } from "./board-header";
 import { ConnectionIndicator } from "./connection-indicator";
 import { RemoteCursors } from "./remote-cursors";
 import { GuestNameModal } from "./guest-name-modal";
+import { UploadToastManager, type ToastEntry } from "./upload-toast";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +88,9 @@ export function Whiteboard({
   // Show name modal for guests who haven't set a name yet
   const [showNameModal, setShowNameModal] = useState(false);
 
+  // Upload toasts — shown in auth mode when images are uploaded
+  const [uploadToasts, setUploadToasts] = useState<ToastEntry[]>([]);
+
   // Load guest identity on client mount
   useEffect(() => {
     if (mode !== "guest") return;
@@ -101,13 +111,74 @@ export function Whiteboard({
     }
   }, [mode, boardId]);
 
-  // Resolve effective user identity for the sync hook
+  // ─── Upload toast helpers ────────────────────────────────────────────
+
+  const addToast = useCallback((id: string, fileName: string) => {
+    setUploadToasts((prev) => [
+      ...prev,
+      { id, fileName, status: "uploading", progress: 0 },
+    ]);
+  }, []);
+
+  const updateToastProgress = useCallback((id: string, progress: number) => {
+    setUploadToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, progress } : t))
+    );
+  }, []);
+
+  const updateToastSuccess = useCallback((id: string) => {
+    setUploadToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: "success" as const, progress: 100 } : t))
+    );
+  }, []);
+
+  const updateToastError = useCallback((id: string, error: string) => {
+    setUploadToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: "error" as const, error } : t))
+    );
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setUploadToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // ─── Asset store — tldraw image upload backend ────────────────────────
+
+  const assetStore = useAssetStore({
+    mode,
+    boardId,
+    onUploadStart: (id, fileName) => {
+      // Only show toasts in auth mode (guest mode is instant base64)
+      if (mode === "auth") addToast(id, fileName);
+    },
+    onUploadProgress: (id, progress) => {
+      if (mode === "auth") updateToastProgress(id, progress);
+    },
+    onUploadComplete: (id) => {
+      if (mode === "auth") updateToastSuccess(id);
+    },
+    onUploadError: (id, error) => {
+      // Show error toast in both modes
+      setUploadToasts((prev) => {
+        const exists = prev.find((t) => t.id === id);
+        if (exists) {
+          return prev.map((t) => (t.id === id ? { ...t, status: "error" as const, error } : t));
+        }
+        // Guest mode: add a new error toast
+        return [...prev, { id, fileName: "Image", status: "error" as const, error }];
+      });
+    },
+  });
+
+  // ─── Resolve effective user identity ─────────────────────────────────
+
   const effectiveUserId = mode === "auth" ? (userId ?? "anonymous") : guestId;
   const effectiveUserName = mode === "auth" ? (userName ?? "Anonymous") : guestName;
   const effectiveAvatarUrl = mode === "auth" ? avatarUrl : null;
   const effectiveColor = mode === "guest" ? guestColor : undefined;
 
-  // Real-time collaboration sync
+  // ─── Real-time collaboration sync ────────────────────────────────────
+
   const { awarenessManager, connectionStatus, peerCount } = useYjsSync({
     boardId,
     editor,
@@ -120,11 +191,11 @@ export function Whiteboard({
     boardName,
   });
 
-  // Broadcast local cursor position to remote peers
   useCursorBroadcast({ editor, awarenessManager });
 
-  // Get list of active collaborators for the header
   const { collaborators } = useActiveUsers(awarenessManager);
+
+  // ─── Editor mount ────────────────────────────────────────────────────
 
   const handleMount = useCallback(
     (mountedEditor: Editor) => {
@@ -139,16 +210,14 @@ export function Whiteboard({
     [boardId, mode]
   );
 
-  // Guest: when user confirms name in modal
+  // ─── Event handlers ──────────────────────────────────────────────────
+
   const handleNameConfirmed = useCallback((name: string, color: string) => {
     setGuestName(name);
     setGuestColor(color);
     setShowNameModal(false);
-    // Awareness will pick up the new name on the next cursor broadcast
-    // (it re-reads from state on the next render cycle)
   }, []);
 
-  // Guest: inline board name rename
   const handleBoardRename = useCallback(
     (newName: string) => {
       setBoardName(newName);
@@ -160,6 +229,8 @@ export function Whiteboard({
     [boardId, mode]
   );
 
+  // ─── Render ──────────────────────────────────────────────────────────
+
   return (
     <div className="relative h-screen w-screen">
       {/* Guest name modal — shown on first visit before canvas interaction */}
@@ -169,7 +240,11 @@ export function Whiteboard({
 
       {/* tldraw canvas — full screen */}
       <div className="absolute inset-0 z-0">
-        <Tldraw onMount={handleMount} autoFocus />
+        <Tldraw
+          onMount={handleMount}
+          autoFocus
+          assets={assetStore}
+        />
       </div>
 
       {/* Remote cursors overlay */}
@@ -191,8 +266,11 @@ export function Whiteboard({
         onChangeName={mode === "guest" ? () => setShowNameModal(true) : undefined}
       />
 
+      {/* Upload progress toasts — bottom-right, above toolbar */}
+      <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />
+
       {/* Connection indicator — bottom-left */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-200">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-[200]">
         <div className="pointer-events-auto">
           <ConnectionIndicator />
         </div>
