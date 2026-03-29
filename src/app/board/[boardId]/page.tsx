@@ -2,17 +2,19 @@
  * Board page — server component that determines guest vs auth mode.
  *
  * Flow:
- * 1. Try to get Clerk auth session
- * 2. If authenticated → auth mode (Phase 7 will add DB fetch + access check)
- * 3. If no session → guest mode (all state lives in client localStorage)
- *
- * Both modes render the same Whiteboard canvas client component.
- * The difference is in which props are passed (userId/userName vs none).
+ * 1. Check Clerk auth session
+ * 2. If authenticated:
+ *    - Call getOrCreateBoard() to verify access + get the real board name
+ *    - If the URL contains a guest nanoid, redirect to the new DB board URL
+ *    - Render in auth mode with real user identity + board name
+ * 3. If no session → guest mode (all state lives in browser localStorage)
  */
 
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { BoardCanvas } from "./board-canvas";
-import { BOARD_DEFAULTS } from "@/lib/constants";
+import { BOARD_DEFAULTS, ROUTES } from "@/lib/constants";
+import { getOrCreateBoard } from "@/actions/board";
 
 interface BoardPageProps {
   params: Promise<{ boardId: string }>;
@@ -25,15 +27,28 @@ export default async function BoardPage({ params }: BoardPageProps) {
   const { userId: clerkId } = await auth();
 
   if (clerkId) {
-    // ─── Auth mode ───────────────────────────────────────────
-    // User is logged in. In Phase 7 we'll fetch the board from DB
-    // and verify access. For now, use defaults + real user identity.
-    const user = await currentUser();
+    // ─── Auth mode ────────────────────────────────────────────
+    // Fetch board from DB, verify access, and handle URL slug bridge
+    const [user, boardResult] = await Promise.all([
+      currentUser(),
+      getOrCreateBoard(boardId),
+    ]);
+
+    if (!boardResult.success) {
+      // Board not found or access denied — redirect to dashboard
+      redirect(ROUTES.DASHBOARD);
+    }
+
+    // If getOrCreateBoard created a new board (guest URL → DB UUID),
+    // redirect to the canonical UUID URL
+    if (boardResult.data.boardId !== boardId) {
+      redirect(ROUTES.BOARD(boardResult.data.boardId));
+    }
 
     return (
       <BoardCanvas
-        boardId={boardId}
-        boardName={BOARD_DEFAULTS.NAME} // Phase 7: fetch from DB
+        boardId={boardResult.data.boardId}
+        boardName={boardResult.data.boardName}
         mode="auth"
         userId={clerkId}
         userName={user?.fullName ?? user?.username ?? "User"}
@@ -43,7 +58,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
   }
 
   // ─── Guest mode ─────────────────────────────────────────────
-  // No session. Board state lives in browser localStorage.
+  // No session — all state lives in browser localStorage.
   // Identity (name, color) is managed client-side via guest.ts.
   return (
     <BoardCanvas

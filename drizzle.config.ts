@@ -22,5 +22,6 @@ export default defineConfig({
     "boards",
     "board_snapshots",
     "board_assets",
+    "favorites",
   ],
 });

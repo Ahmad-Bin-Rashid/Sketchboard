@@ -1,28 +1,54 @@
 import type { Metadata } from "next";
+import { currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { getBoards } from "@/actions/board";
+import { getOrCreatePersonalTeam } from "@/actions/team";
+import { ROUTES, BOARD_DEFAULTS } from "@/lib/constants";
 import { DashboardContent } from "./dashboard-content";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Dashboard",
+  title: "Dashboard — SketchBoard",
+  description: "Manage your collaborative whiteboards",
 };
 
-/**
- * Dashboard page — shows user's boards.
- * Server component that passes data to the client-side grid.
- *
- * Phase 7 will add:
- * - Fetch boards from DB for current user
- * - Search and filtering
- * - Favorites
- */
-export default function DashboardPage() {
-  // TODO (Phase 7): Fetch boards from DB
-  const mockBoards = [
-    { id: "demo-board-1", name: "Project Brainstorm", updatedAt: "2 hours ago", activeUsers: 2 },
-    { id: "demo-board-2", name: "Sprint Planning", updatedAt: "Yesterday", activeUsers: 0 },
-    { id: "demo-board-3", name: "User Flow Mapping", updatedAt: "3 days ago", activeUsers: 0 },
-  ];
+interface DashboardPageProps {
+  searchParams: Promise<{ filter?: string; search?: string }>;
+}
 
-  return <DashboardContent boards={mockBoards} />;
+/**
+ * Dashboard page — server component.
+ *
+ * Flow:
+ * 1. Verify user is authenticated (redirect to sign-in if not)
+ * 2. Ensure the user's personal team exists (idempotent)
+ * 3. Fetch boards with optional search/filter from URL params
+ * 4. Render DashboardContent client component with the data
+ */
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const user = await currentUser();
+
+  if (!user) {
+    redirect(ROUTES.SIGN_IN);
+  }
+
+  // Ensure personal team exists on first load
+  await getOrCreatePersonalTeam();
+
+  // Parse URL params
+  const params = await searchParams;
+  const filter = (params.filter as "all" | "favorites" | "recent") ?? "all";
+  const search = params.search ?? "";
+
+  // Fetch boards from DB with filtering
+  const boardsResult = await getBoards({ filter, search });
+  const boards = boardsResult.success ? boardsResult.data : [];
+
+  return (
+    <Suspense>
+      <DashboardContent boards={boards} filter={filter} search={search} />
+    </Suspense>
+  );
 }

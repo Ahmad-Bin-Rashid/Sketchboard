@@ -109,3 +109,50 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 export type ActionResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+// ─── Dashboard Types ─────────────────────────────────────────────────────────
+
+/** Board enriched with computed fields for dashboard display */
+export interface BoardWithDetails {
+  id: string;
+  teamId: string;
+  name: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+  /** Whether the current user has favorited this board */
+  isFavorite: boolean;
+  /** Creator's display name */
+  creatorName: string;
+  /** User's role on the board's team */
+  userRole: UserRole;
+}
+
+/** Team with member count for display in sidebar / settings */
+export interface TeamWithCounts {
+  id: string;
+  name: string;
+  ownerId: string;
+  tier: TierName;
+  createdAt: Date;
+  memberCount: number;
+  boardCount: number;
+  /** Whether this is the user's personal team (auto-created) */
+  isPersonal: boolean;
+}
+
+/** Team member with user details for the settings member list */
+export interface TeamMemberWithUser {
+  id: string;
+  userId: string;
+  teamId: string;
+  role: UserRole;
+  joinedAt: Date;
+  user: {
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+  };
+}

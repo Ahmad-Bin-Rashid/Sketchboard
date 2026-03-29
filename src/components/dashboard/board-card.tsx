@@ -1,112 +1,282 @@
 "use client";
 
 /**
- * BoardCard — displays a board preview on the dashboard.
+ * BoardCard — grid item representing a single board in the dashboard.
  *
- * Shows a thumbnail placeholder (or canvas preview in Phase 7),
- * board name, last edited time, and a context menu.
+ * Displays:
+ * - Thumbnail or placeholder icon
+ * - Board name + relative last-updated timestamp
+ * - Favorite star (toggle on click, no navigation)
+ * - Context menu (⋯) with: Rename, Duplicate, Favorite/Unfavorite, Delete
  *
- * Used in the board grid on the dashboard page.
+ * Clicking the card navigates to the board.
+ * All actions use server actions with optimistic UI patterns.
  */
 
+import { useCallback, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { MoreHorizontal, Clock, Users } from "lucide-react";
-import { ROUTES } from "@/lib/constants";
+import {
+  Clock,
+  Copy,
+  MoreHorizontal,
+  Pencil,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/utils";
+import { ROUTES } from "@/lib/constants";
+import { toggleFavorite, duplicateBoard } from "@/actions/board";
+import { RenameDialog } from "./rename-dialog";
+import { DeleteDialog } from "./delete-dialog";
+import type { BoardWithDetails } from "@/types";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface BoardCardProps {
-  id: string;
-  name: string;
-  updatedAt: string;
-  /** Number of active collaborators */
-  activeUsers?: number;
-  /** Thumbnail URL — if null, shows a gradient placeholder */
-  thumbnailUrl?: string | null;
+  board: BoardWithDetails;
 }
 
-export function BoardCard({
-  id,
-  name,
-  updatedAt,
-  activeUsers = 0,
-  thumbnailUrl,
-}: BoardCardProps) {
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export function BoardCard({ board }: BoardCardProps) {
+  const [isFavorite, setIsFavorite] = useState(board.isFavorite);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // ─── Context menu ────────────────────────────────────────────────────
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(true);
+  };
+
+  const closeMenu = () => setMenuOpen(false);
+
+  // Close menu on outside click
+  const handleMenuBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) {
+        closeMenu();
+      }
+    },
+    []
+  );
+
+  // ─── Actions ─────────────────────────────────────────────────────────
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Optimistic update
+    setIsFavorite((prev) => !prev);
+    startTransition(async () => {
+      const result = await toggleFavorite(board.id);
+      if (!result.success) {
+        // Revert on error
+        setIsFavorite(board.isFavorite);
+      }
+    });
+  };
+
+  const handleDuplicate = () => {
+    closeMenu();
+    startTransition(async () => {
+      await duplicateBoard(board.id);
+    });
+  };
+
+  const handleRename = () => {
+    closeMenu();
+    setRenameOpen(true);
+  };
+
+  const handleDelete = () => {
+    closeMenu();
+    setDeleteOpen(true);
+  };
+
+  const canDelete = board.userRole === "owner" || board.userRole === "admin";
+  const canRename = board.userRole !== "viewer";
+
   return (
-    <Link
-      href={ROUTES.BOARD(id)}
-      className="group animate-fade-in"
-    >
-      <div
-        className={cn(
-          "overflow-hidden rounded-xl border border-card-border bg-card transition-all duration-200",
-          "hover:border-primary/30 hover:shadow-md"
-        )}
-      >
-        {/* Thumbnail area */}
-        <div className="relative aspect-[16/10] overflow-hidden bg-surface">
-          {thumbnailUrl ? (
-            <img
-              src={thumbnailUrl}
-              alt={name}
-              className="h-full w-full object-cover"
+    <>
+      {/* Card */}
+      <div className="group relative">
+        <Link
+          href={ROUTES.BOARD(board.id)}
+          className="block rounded-xl border border-card-border bg-card transition-all duration-200 hover:border-border hover:shadow-md"
+        >
+          {/* Thumbnail area */}
+          <div className="relative aspect-[16/10] overflow-hidden rounded-t-xl bg-surface">
+            {board.thumbnailUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={board.thumbnailUrl}
+                alt={`Preview of ${board.name}`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <svg
+                  className="h-10 w-10 text-muted/40"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"
+                  />
+                </svg>
+              </div>
+            )}
+
+            {/* Hover overlay */}
+            <div className="absolute inset-0 flex items-center justify-center bg-foreground/0 opacity-0 transition-all duration-200 group-hover:bg-foreground/5 group-hover:opacity-100">
+              <span className="rounded-lg bg-panel-bg px-3 py-1.5 text-xs font-medium shadow-md backdrop-blur-sm">
+                Open board
+              </span>
+            </div>
+
+            {/* Favorite star — top-left */}
+            <button
+              onClick={handleToggleFavorite}
+              disabled={isPending}
+              className={cn(
+                "absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-md transition-all",
+                isFavorite
+                  ? "opacity-100 text-amber-500 bg-panel-bg shadow-sm backdrop-blur-sm"
+                  : "opacity-0 text-muted-foreground bg-panel-bg shadow-sm backdrop-blur-sm group-hover:opacity-100"
+              )}
+              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star
+                className="h-3.5 w-3.5"
+                fill={isFavorite ? "currentColor" : "none"}
+              />
+            </button>
+          </div>
+
+          {/* Card footer */}
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-sm font-medium">{board.name}</h3>
+              <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3 flex-shrink-0" />
+                <span>{formatRelativeTime(board.updatedAt)}</span>
+              </div>
+            </div>
+
+            {/* Context menu trigger */}
+            <button
+              onClick={openMenu}
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md opacity-0 transition-all hover:bg-surface-hover group-hover:opacity-100"
+              aria-label="Board options"
+            >
+              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </Link>
+
+        {/* Context menu dropdown */}
+        {menuOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-[400]"
+              onClick={handleMenuBackdropClick}
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-light via-surface to-secondary-light">
-              <svg
-                className="h-10 w-10 text-muted/50"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1}
+            {/* Menu */}
+            <div
+              ref={menuRef}
+              className="absolute bottom-full right-0 z-[401] mb-1 w-44 overflow-hidden rounded-xl border border-border bg-card shadow-lg"
+            >
+              {canRename && (
+                <MenuButton icon={<Pencil className="h-3.5 w-3.5" />} onClick={handleRename}>
+                  Rename
+                </MenuButton>
+              )}
+              <MenuButton icon={<Copy className="h-3.5 w-3.5" />} onClick={handleDuplicate}>
+                Duplicate
+              </MenuButton>
+              <MenuButton
+                icon={
+                  <Star
+                    className="h-3.5 w-3.5"
+                    fill={isFavorite ? "currentColor" : "none"}
+                  />
+                }
+                onClick={() => {
+                  closeMenu();
+                  handleToggleFavorite({ preventDefault: () => {}, stopPropagation: () => {} } as React.MouseEvent);
+                }}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"
-                />
-              </svg>
+                {isFavorite ? "Unfavorite" : "Favorite"}
+              </MenuButton>
+              {canDelete && (
+                <>
+                  <div className="my-1 h-px bg-border" />
+                  <MenuButton
+                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                    onClick={handleDelete}
+                    variant="destructive"
+                  >
+                    Delete
+                  </MenuButton>
+                </>
+              )}
             </div>
-          )}
-
-          {/* Active users badge */}
-          {activeUsers > 0 && (
-            <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-panel-bg px-2 py-0.5 text-xs shadow-sm backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-muted-foreground">{activeUsers}</span>
-            </div>
-          )}
-
-          {/* Hover overlay */}
-          <div className="absolute inset-0 flex items-center justify-center bg-foreground/0 opacity-0 transition-all duration-200 group-hover:bg-foreground/5 group-hover:opacity-100">
-            <span className="rounded-lg bg-panel-bg px-3 py-1.5 text-xs font-medium shadow-md backdrop-blur-sm">
-              Open board
-            </span>
-          </div>
-        </div>
-
-        {/* Card footer */}
-        <div className="flex items-center justify-between px-3 py-2.5">
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-medium">{name}</h3>
-            <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>{updatedAt}</span>
-            </div>
-          </div>
-
-          {/* More menu button */}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // TODO: Open context menu (rename, delete, duplicate)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-md opacity-0 transition-all hover:bg-surface-hover group-hover:opacity-100"
-          >
-            <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
+          </>
+        )}
       </div>
-    </Link>
+
+      {/* Modals */}
+      <RenameDialog
+        boardId={board.id}
+        currentName={board.name}
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+      />
+      <DeleteDialog
+        boardId={board.id}
+        boardName={board.name}
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+      />
+    </>
+  );
+}
+
+// ─── MenuButton ───────────────────────────────────────────────────────────────
+
+interface MenuButtonProps {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  onClick: () => void;
+  variant?: "default" | "destructive";
+}
+
+function MenuButton({ icon, children, onClick, variant = "default" }: MenuButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors",
+        variant === "destructive"
+          ? "text-destructive hover:bg-destructive/10"
+          : "text-foreground hover:bg-surface-hover"
+      )}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }
