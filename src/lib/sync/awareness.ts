@@ -19,11 +19,27 @@
  *     → getRemoteUsers() returns updated list
  */
 
-import { type Awareness } from "y-protocols/awareness";
 import type { CursorPresence, CollaboratorInfo } from "@/types";
 import { CURSOR_COLORS } from "@/lib/constants";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Awareness interface ──────────────────────────────────────────────────────
+
+/**
+ * Minimal duck-typed Awareness interface.
+ *
+ * Both `y-protocols/awareness` (used by y-partykit) and the Liveblocks-internal
+ * Awareness class (from @liveblocks/yjs) implement this surface.
+ * We avoid importing from either package directly to prevent type conflicts.
+ */
+export interface AwarenessLike {
+  getStates: () => Map<number, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setLocalState: (state: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setLocalStateField: (field: string, value: any) => void;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  off: (event: string, callback: (...args: unknown[]) => void) => void;
+}
 
 /**
  * Shape of the awareness state for each user.
@@ -49,7 +65,9 @@ export interface AwarenessUserState {
 }
 
 export interface AwarenessManagerOptions {
-  awareness: Awareness;
+  awareness: AwarenessLike;
+  /** The Yjs document's clientID — used for self-identification in awareness states */
+  clientID: number;
   userId: string;
   userName: string;
   avatarUrl?: string | null;
@@ -82,7 +100,8 @@ export function getCursorColor(clientId: number): string {
  * ```
  */
 export class AwarenessManager {
-  private readonly awareness: Awareness;
+  private readonly awareness: AwarenessLike;
+  private readonly clientID: number;
   private readonly userId: string;
   private readonly userName: string;
   private readonly avatarUrl: string | null;
@@ -90,12 +109,13 @@ export class AwarenessManager {
   private changeListeners: Set<() => void> = new Set();
   private isDisposed = false;
 
-  constructor({ awareness, userId, userName, avatarUrl, color }: AwarenessManagerOptions) {
+  constructor({ awareness, clientID, userId, userName, avatarUrl, color }: AwarenessManagerOptions) {
     this.awareness = awareness;
+    this.clientID = clientID;
     this.userId = userId;
     this.userName = userName;
     this.avatarUrl = avatarUrl ?? null;
-    this.color = color ?? getCursorColor(awareness.clientID);
+    this.color = color ?? getCursorColor(clientID);
 
     // Set initial local state
     this.setLocalState();
@@ -171,7 +191,7 @@ export class AwarenessManager {
 
     this.awareness.getStates().forEach((state, clientId) => {
       // Skip self
-      if (clientId === this.awareness.clientID) return;
+      if (clientId === this.clientID) return;
 
       const awarenessState = state as AwarenessUserState;
       if (!awarenessState?.user) return;

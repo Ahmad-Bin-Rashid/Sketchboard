@@ -59,6 +59,9 @@ export function DashboardContent({
   // Push debounced search to URL params → triggers server re-fetch
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
+    const currentSearch = params.get("search") ?? "";
+    if (currentSearch === debouncedSearch) return;
+
     if (debouncedSearch) {
       params.set("search", debouncedSearch);
     } else {

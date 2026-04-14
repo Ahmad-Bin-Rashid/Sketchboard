@@ -93,6 +93,13 @@ export function Whiteboard({
 
   // Load guest identity on client mount
   useEffect(() => {
+    console.log("[Whiteboard] Component MOUNTED. boardId:", boardId, "mode:", mode);
+    return () => {
+      console.log("[Whiteboard] Component UNMOUNTED. boardId:", boardId, "mode:", mode);
+    };
+  }, [boardId, mode]);
+
+  useEffect(() => {
     if (mode !== "guest") return;
     const identity = getGuestIdentity();
     setGuestId(identity.guestId);
@@ -147,6 +154,7 @@ export function Whiteboard({
   const assetStore = useAssetStore({
     mode,
     boardId,
+    editor,
     onUploadStart: (id, fileName) => {
       // Only show toasts in auth mode (guest mode is instant base64)
       if (mode === "auth") addToast(id, fileName);
@@ -209,6 +217,47 @@ export function Whiteboard({
     },
     [boardId, mode]
   );
+
+  // Migrate any local storage assets that have been uploaded to Uploadthing
+  useEffect(() => {
+    if (!editor || mode !== "auth") return;
+
+    const migrateAssets = () => {
+      try {
+        const mappingsStr = localStorage.getItem("sketchboard-media-mappings");
+        if (!mappingsStr) return;
+        const mappings = JSON.parse(mappingsStr) as Record<string, string>;
+
+        const assets = editor.getAssets();
+        const assetsToUpdate: any[] = [];
+
+        for (const asset of assets) {
+          const cloudUrl = mappings[asset.id];
+          if (cloudUrl && asset.props && "src" in asset.props && typeof asset.props.src === "string" && asset.props.src.startsWith("data:")) {
+            assetsToUpdate.push({
+              id: asset.id,
+              type: asset.type,
+              props: {
+                ...asset.props,
+                src: cloudUrl,
+              },
+            });
+          }
+        }
+
+        if (assetsToUpdate.length > 0) {
+          console.log("[Whiteboard] Migrating local assets to cloud URLs:", assetsToUpdate);
+          editor.updateAssets(assetsToUpdate);
+        }
+      } catch (err) {
+        console.warn("[Whiteboard] Failed to migrate local assets:", err);
+      }
+    };
+
+    // Run after a short delay to allow collaborative synchronization to load
+    const timeoutId = setTimeout(migrateAssets, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [editor, mode]);
 
   // ─── Event handlers ──────────────────────────────────────────────────
 

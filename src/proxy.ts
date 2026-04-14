@@ -20,6 +20,8 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks(.*)",
+  "/api/liveblocks-auth",  // must be public — called by guests with no Clerk session
+  "/api/uploadthing",      // Uploadthing handles its own auth
   "/board(.*)",
 ]);
 

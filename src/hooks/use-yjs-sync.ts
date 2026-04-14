@@ -1,31 +1,36 @@
 /**
- * useYjsSync — React hook for real-time collaborative sync.
+ * useYjsSync — real-time collaboration hook using Liveblocks + Yjs.
  *
- * Orchestrates the full collaboration stack:
- * 1. Creates a Yjs document (Y.Doc)
- * 2. Connects to PartyKit via y-partykit WebsocketProvider
- * 3. Wires up TldrawYjsSync (tldraw Store ↔ Y.Doc bridge)
- * 4. Manages AwarenessManager for cursor/presence broadcasting
- * 5. Tracks connection status in the global store
+ * Replaces the previous PartyKit (y-partykit) transport with Liveblocks.
+ * The CRDT layer (TldrawYjsSync) and awareness layer (AwarenessManager)
+ * are completely unchanged — only the WebSocket provider changes.
  *
- * Two modes:
- * - "guest": localStorage save/restore; no DB; board state survives reload
- * - "auth":  DB persistence via PartyKit; no localStorage
+ * Architecture:
+ * - Liveblocks Room → getYjsProviderForRoom → Y.Doc → TldrawYjsSync → tldraw
+ * - Liveblocks Room → getYjsProviderForRoom → awareness → AwarenessManager
+ *
+ * Liveblocks v3 API (recommended pattern):
+ * - `client.enterRoom(roomId, opts)` → `{ room, leave }`
+ * - `getYjsProviderForRoom(room)` — the recommended way to get the Yjs provider.
+ *   It manages the provider lifecycle automatically and avoids issues with
+ *   dynamically switching between rooms (unlike `new LiveblocksYjsProvider()`).
+ * - `yProvider.getYDoc()` — get the internally managed Y.Doc
+ * - `yProvider.awareness` — the awareness instance
  *
  * Lifecycle:
- * - On mount: connect to PartyKit room, start sync
+ * - On mount: enter Liveblocks room, get Yjs provider via getYjsProviderForRoom
  * - Guest mode: restore saved snapshot into tldraw on first sync
  * - Guest mode: auto-save to localStorage on store changes (debounced 2s)
- * - On unmount: disconnect, dispose all managers, clean up
+ * - On unmount: call leave(), clean up
  */
 
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
-import * as Y from "yjs";
-import YPartyKitProvider from "y-partykit/provider";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
+import { getYjsProviderForRoom } from "@liveblocks/yjs";
 import type { Editor } from "tldraw";
 
+import { createLiveblocksClient } from "@/lib/liveblocks";
 import { TldrawYjsSync } from "@/lib/sync/tldraw-yjs-sync";
 import { AwarenessManager } from "@/lib/sync/awareness";
 import { useConnectionStore, type ConnectionStatus } from "@/lib/sync/connection";
@@ -36,7 +41,7 @@ import { loadGuestBoard, saveGuestBoard } from "@/lib/local-board-store";
 export type WhiteboardMode = "guest" | "auth";
 
 export interface UseYjsSyncOptions {
-  /** Board ID — used as the PartyKit room name */
+  /** Board ID — used as the Liveblocks room name */
   boardId: string;
   /** tldraw Editor instance (available after onMount) */
   editor: Editor | null;
@@ -52,7 +57,7 @@ export interface UseYjsSyncOptions {
   enabled?: boolean;
   /**
    * "guest": localStorage persistence, no DB
-   * "auth":  DB persistence via PartyKit server callbacks
+   * "auth":  DB persistence (handled separately)
    */
   mode?: WhiteboardMode;
   /** Current board name (used for localStorage save label in guest mode) */
@@ -70,12 +75,6 @@ export interface UseYjsSyncReturn {
   isSynced: boolean;
 }
 
-// ─── Configuration ───────────────────────────────────────────────────────────
-
-function getPartyKitHost(): string {
-  return process.env.NEXT_PUBLIC_PARTYKIT_HOST || "localhost:1999";
-}
-
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useYjsSync({
@@ -90,11 +89,11 @@ export function useYjsSync({
   boardName = "Untitled Board",
 }: UseYjsSyncOptions): UseYjsSyncReturn {
   // Refs for cleanup-safe access to mutable objects
-  const docRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<YPartyKitProvider | null>(null);
   const syncRef = useRef<TldrawYjsSync | null>(null);
   const awarenessManagerRef = useRef<AwarenessManager | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // `leave` function returned by client.enterRoom — called on cleanup
+  const leaveRoomRef = useRef<(() => void) | null>(null);
 
   // Local state
   const [awarenessManager, setAwarenessManager] =
@@ -107,6 +106,13 @@ export function useYjsSync({
   const setStatus = useConnectionStore((s) => s.setStatus);
   const setPeerCount = useConnectionStore((s) => s.setPeerCount);
   const reset = useConnectionStore((s) => s.reset);
+
+  /**
+   * Liveblocks client — memoized so the same instance is reused across
+   * re-renders. Creating a new client on every render would open duplicate
+   * WebSocket connections.
+   */
+  const liveblocksClient = useMemo(() => createLiveblocksClient(), []);
 
   /**
    * Clean up all collaboration resources.
@@ -125,12 +131,11 @@ export function useYjsSync({
     awarenessManagerRef.current = null;
     setAwarenessManager(null);
 
-    providerRef.current?.disconnect();
-    providerRef.current?.destroy();
-    providerRef.current = null;
-
-    docRef.current?.destroy();
-    docRef.current = null;
+    // Leave the Liveblocks room (frees WebSocket connection).
+    // getYjsProviderForRoom automatically cleans up the provider when the room
+    // is destroyed, so we only need to call leave() here.
+    leaveRoomRef.current?.();
+    leaveRoomRef.current = null;
 
     setIsSynced(false);
     reset();
@@ -148,78 +153,102 @@ export function useYjsSync({
       return;
     }
 
-    const host = getPartyKitHost();
-
-    // 1. Create Yjs document
-    const doc = new Y.Doc();
-    docRef.current = doc;
-
-    // 2. Connect to PartyKit via y-partykit WebsocketProvider
-    const provider = new YPartyKitProvider(host, boardId, doc, {
-      connect: true,
-      party: "whiteboard",
+    // ── 1. Enter the Liveblocks room ──────────────────────────────────────
+    // One room per board ID. Uses the memoized client so we don't create
+    // duplicate connections on re-renders.
+    //
+    // Liveblocks v3 API: enterRoom returns { room, leave }
+    const { room, leave } = liveblocksClient.enterRoom(boardId, {
+      initialPresence: {},
     });
-    providerRef.current = provider;
+    leaveRoomRef.current = leave;
 
-    // 3. Track connection status
-    const handleStatus = ({ status }: { status: string }) => {
+    // Track connection status via room events
+    setStatus("connecting");
+
+    const unsubStatus = room.subscribe("status", (status) => {
       switch (status) {
         case "connected":
           setStatus("connected");
           break;
-        case "connecting":
+        case "reconnecting":
           setStatus("connecting");
           break;
         case "disconnected":
           setStatus("disconnected");
           break;
       }
-    };
-    provider.on("status", handleStatus);
+    });
 
-    // 4. Handle initial sync
+    // ── 2. Get the Yjs provider via getYjsProviderForRoom ─────────────────
+    // This is the recommended Liveblocks v3 approach. It:
+    // - Creates or returns an existing LiveblocksYjsProvider for this room
+    // - Internally manages the Y.Doc (setting clientID = room connectionId)
+    // - Automatically destroys the provider when the room is destroyed
+    //   (so we don't need to call provider.destroy() ourselves)
+    //
+    // NOTE: Do NOT pass an external Y.Doc — let the provider manage it via
+    // getYjsProviderForRoom, then retrieve the doc with yProvider.getYDoc().
+    const yProvider = getYjsProviderForRoom(room);
+
+    // Get the internally-managed Y.Doc (clientID is already set correctly)
+    const doc = yProvider.getYDoc();
+
+    // ── 3. Handle initial sync ────────────────────────────────────────────
     const handleSync = (synced: boolean) => {
       if (!synced) return;
+      console.log("[useYjsSync] Sync event fired. yProvider.awareness:", !!yProvider.awareness, "doc.clientID:", doc?.clientID);
       setIsSynced(true);
 
-      // 4a. Restore guest localStorage snapshot BEFORE wiring tldraw sync
-      if (mode === "guest") {
-        const saved = loadGuestBoard(boardId);
-        if (saved) {
-          try {
-            editor.loadSnapshot(saved);
-          } catch {
-            // Snapshot may be incompatible (e.g., tldraw version change) — ignore
+      try {
+        // 3a. Restore guest localStorage snapshot BEFORE wiring tldraw sync
+        if (mode === "guest") {
+          const saved = loadGuestBoard(boardId);
+          if (saved) {
+            try {
+              editor.loadSnapshot(saved);
+            } catch (err) {
+              console.error("[useYjsSync] Failed to load snapshot:", err);
+            }
           }
         }
-      }
 
-      // 4b. Wire tldraw ↔ Yjs sync bridge
-      if (!syncRef.current) {
-        syncRef.current = new TldrawYjsSync({ doc, editor });
-      }
+        // 3b. Wire tldraw ↔ Yjs sync bridge (unchanged from PartyKit version)
+        if (!syncRef.current) {
+          console.log("[useYjsSync] Instantiating TldrawYjsSync");
+          syncRef.current = new TldrawYjsSync({ doc, editor });
+        }
 
-      // 4c. Create awareness manager
-      if (!awarenessManagerRef.current) {
-        const manager = new AwarenessManager({
-          awareness: provider.awareness,
-          userId,
-          userName,
-          avatarUrl,
-          ...(userColor ? { color: userColor } : {}),
-        });
-        awarenessManagerRef.current = manager;
-        setAwarenessManager(manager);
+        // 3c. Create awareness manager (unchanged — same awareness API)
+        if (!awarenessManagerRef.current) {
+          if (!yProvider.awareness) {
+            console.error("[useYjsSync] yProvider.awareness is missing!");
+          }
+          console.log("[useYjsSync] Instantiating AwarenessManager with clientID:", doc.clientID);
+          const manager = new AwarenessManager({
+            awareness: yProvider.awareness as unknown as import("@/lib/sync/awareness").AwarenessLike,
+            clientID: doc.clientID,
+            userId,
+            userName,
+            avatarUrl,
+            ...(userColor ? { color: userColor } : {}),
+          });
+          awarenessManagerRef.current = manager;
+          setAwarenessManager(manager);
 
-        // Track peer count changes
-        const unsubPeers = manager.onRemoteChange(() => {
+          // Track peer count changes
+          const unsubPeers = manager.onRemoteChange(() => {
+            setPeerCount(manager.getPeerCount());
+          });
           setPeerCount(manager.getPeerCount());
-        });
-        setPeerCount(manager.getPeerCount());
-        (manager as unknown as Record<string, unknown>).__unsubPeers = unsubPeers;
+          (manager as unknown as Record<string, unknown>).__unsubPeers = unsubPeers;
+        }
+      } catch (err) {
+        console.error("[useYjsSync] Uncaught error inside handleSync:", err);
       }
+    };
 
-      // 4d. Guest mode: auto-save to localStorage on store changes (debounced 2s)
+      // 3d. Guest mode: auto-save to localStorage on store changes (debounced 2s)
       if (mode === "guest") {
         const unsubStore = editor.store.listen(
           () => {
@@ -231,23 +260,23 @@ export function useYjsSync({
           },
           { source: "all", scope: "document" }
         );
-        (provider as unknown as Record<string, unknown>).__unsubStore = unsubStore;
+        (yProvider as unknown as Record<string, unknown>).__unsubStore = unsubStore;
       }
-    };
 
-    provider.on("sync", handleSync);
+    // LiveblocksYjsProvider fires "sync" just like y-partykit
+    yProvider.on("sync", handleSync);
 
     // If already synced (e.g., reconnection), trigger immediately
-    if (provider.synced) {
+    if (yProvider.synced) {
       handleSync(true);
     }
 
-    // Cleanup on unmount or dep change
+    // ── Cleanup ───────────────────────────────────────────────────────────
     return () => {
-      provider.off("status", handleStatus);
-      provider.off("sync", handleSync);
+      unsubStatus();
+      yProvider.off("sync", handleSync);
 
-      const unsubStore = (provider as unknown as Record<string, unknown>)
+      const unsubStore = (yProvider as unknown as Record<string, unknown>)
         .__unsubStore as (() => void) | undefined;
       unsubStore?.();
 

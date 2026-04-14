@@ -222,7 +222,8 @@ export async function getBoard(
  * Returns the new board's ID (UUID) for redirect.
  */
 export async function createBoard(
-  name: string = "Untitled Board"
+  name: string = "Untitled Board",
+  skipRevalidate: boolean = false
 ): Promise<ActionResult<{ boardId: string }>> {
   const user = await getCurrentDbUser();
   if (!user) return { success: false, error: "Not authenticated" };
@@ -240,7 +241,9 @@ export async function createBoard(
     })
     .returning({ id: boards.id });
 
-  revalidatePath(ROUTES.DASHBOARD);
+  if (!skipRevalidate) {
+    revalidatePath(ROUTES.DASHBOARD);
+  }
   return { success: true, data: { boardId: newBoard.id } };
 }
 
@@ -261,30 +264,31 @@ export async function getOrCreateBoard(boardId: string): Promise<
   const user = await getCurrentDbUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
-  // Check if board already exists and user has access
-  const role = await getUserBoardRole(user.id, boardId);
-  if (role) {
-    const board = await db
-      .select({ id: boards.id, name: boards.name })
-      .from(boards)
-      .where(eq(boards.id, boardId))
-      .limit(1);
+  // Check if the ID looks like a valid UUID before executing DB queries
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(boardId);
 
-    if (board[0]) {
-      return {
-        success: true,
-        data: { boardId: board[0].id, boardName: board[0].name, isNew: false },
-      };
+  if (isUuid) {
+    // Check if board already exists and user has access
+    const role = await getUserBoardRole(user.id, boardId);
+    if (role) {
+      const board = await db
+        .select({ id: boards.id, name: boards.name })
+        .from(boards)
+        .where(eq(boards.id, boardId))
+        .limit(1);
+
+      if (board[0]) {
+        return {
+          success: true,
+          data: { boardId: board[0].id, boardName: board[0].name, isNew: false },
+        };
+      }
     }
   }
 
-  // Board doesn't exist yet — check if the ID looks like a valid UUID
-  // If it's a nanoid (not a UUID), redirect to a new UUID-based board
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(boardId);
-
   if (!isUuid) {
-    // It's a guest nanoid board — create a new DB board and redirect
-    const result = await createBoard();
+    // It's a guest nanoid board — create a new DB board and redirect, skipping revalidation during rendering
+    const result = await createBoard("Untitled Board", true);
     if (!result.success) return result;
     return {
       success: true,

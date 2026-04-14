@@ -13,8 +13,12 @@ import { APP_NAME } from "@/lib/constants";
 import { ROUTES } from "@/lib/constants";
 import { ArrowRight, LogIn, Pencil, Users, Download } from "lucide-react";
 import { GuestLandingClient } from "./landing-client";
+import { UserButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { userId } = await auth();
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* ─── Navbar ──────────────────────────────────────────── */}
@@ -31,20 +35,43 @@ export default function HomePage() {
           </div>
 
           {/* Nav actions */}
-          <nav className="flex items-center gap-2">
-            <Link
-              href={ROUTES.SIGN_IN}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              Sign In
-            </Link>
-            <Link
-              href={ROUTES.SIGN_UP}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
-            >
-              Get Started
-            </Link>
+          <nav className="flex items-center gap-3">
+            {userId ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Dashboard
+                </Link>
+                <div className="flex items-center justify-center">
+                  <UserButton
+                    afterSignOutUrl="/"
+                    appearance={{
+                      elements: {
+                        avatarBox: "h-7 w-7",
+                      },
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <Link
+                  href={ROUTES.SIGN_IN}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <LogIn className="h-3.5 w-3.5" />
+                  Sign In
+                </Link>
+                <Link
+                  href={ROUTES.SIGN_UP}
+                  className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -111,11 +138,24 @@ export default function HomePage() {
       {/* ─── Footer ──────────────────────────────────────────── */}
       <footer className="border-t border-border/50 py-6 text-center">
         <p className="text-xs text-muted-foreground">
-          {APP_NAME} · For auth users:{" "}
-          <Link href={ROUTES.SIGN_UP} className="text-primary hover:underline">
-            create an account
-          </Link>{" "}
-          to access the dashboard and cloud saves.
+          {APP_NAME}
+          {userId ? (
+            <>
+              {" "}· Signed in. Go to your{" "}
+              <Link href="/dashboard" className="text-primary hover:underline">
+                dashboard
+              </Link>{" "}
+              to access your boards.
+            </>
+          ) : (
+            <>
+              {" "}· For auth users:{" "}
+              <Link href={ROUTES.SIGN_UP} className="text-primary hover:underline">
+                create an account
+              </Link>{" "}
+              to access the dashboard and cloud saves.
+            </>
+          )}
         </p>
       </footer>
     </div>

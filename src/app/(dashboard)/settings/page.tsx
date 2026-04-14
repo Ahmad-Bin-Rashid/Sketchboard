@@ -59,6 +59,7 @@ export default async function SettingsPage() {
           </h2>
           <div className="overflow-hidden rounded-2xl border border-card-border bg-card">
             <UserProfile
+              routing="hash"
               appearance={{
                 elements: {
                   rootBox: "w-full",
