@@ -18,6 +18,7 @@ export const ROUTES = {
   DASHBOARD: "/dashboard",
   BOARD: (boardId: string) => `/board/${boardId}` as const,
   SETTINGS: "/settings",
+  MEDIA: "/media",
   API: {
     BOARDS: "/api/boards",
     BOARD: (boardId: string) => `/api/boards/${boardId}` as const,
@@ -69,7 +70,7 @@ export const TIERS = {
     name: "Free",
     maxBoards: 3,
     maxTeamMembers: 5,
-    maxStorageMB: 100,
+    maxStorageMB: 20,
   },
   PRO: {
     name: "Pro",
@@ -91,6 +92,8 @@ export const UPLOAD = {
   /** Max file size per image upload (must match Uploadthing router maxFileSize) */
   MAX_FILE_SIZE_MB: 8,
   ACCEPTED_IMAGE_TYPES: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
+  /** Max storage space in bytes/MB for local browser fallback */
+  MAX_LOCAL_STORAGE_MB: 5,
 } as const;
 
 // ─── UI ──────────────────────────────────────────────────────────────────────

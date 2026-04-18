@@ -19,6 +19,9 @@ import { db } from "@/lib/db";
 import { boardAssets, users } from "@/lib/db/schema";
 import type { ActionResult } from "@/types";
 import { TIERS } from "@/lib/constants";
+import { UTApi } from "uploadthing/server";
+
+const utapi = new UTApi();
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -184,15 +187,53 @@ export async function deleteAssets(
 
   // Only delete assets that belong to this user
   let deleted = 0;
+  const keysToDelete: string[] = [];
+
   for (const url of assetUrls) {
     const result = await db
       .delete(boardAssets)
       .where(
         sql`${boardAssets.url} = ${url} AND ${boardAssets.uploadedBy} = ${dbUserId}`
       )
-      .returning({ id: boardAssets.id });
-    deleted += result.length;
+      .returning({ id: boardAssets.id, url: boardAssets.url });
+
+    if (result.length > 0) {
+      deleted += result.length;
+      for (const row of result) {
+        const key = row.url.split("/f/")[1] || row.url.substring(row.url.lastIndexOf("/") + 1);
+        if (key) {
+          keysToDelete.push(key);
+        }
+      }
+    }
+  }
+
+  if (keysToDelete.length > 0) {
+    try {
+      await utapi.deleteFiles(keysToDelete);
+    } catch (err) {
+      console.error("[deleteAssets] Failed to delete files from Uploadthing:", err);
+    }
   }
 
   return { success: true, data: { deleted } };
+}
+
+/**
+ * Get all assets uploaded by the current user.
+ */
+export async function getUserAssets(): Promise<ActionResult<Array<typeof boardAssets.$inferSelect>>> {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { success: false, error: "Not authenticated" };
+
+  const dbUserId = await getDbUserId(clerkId);
+  if (!dbUserId) return { success: false, error: "User not found in database" };
+
+  const assets = await db
+    .select()
+    .from(boardAssets)
+    .where(eq(boardAssets.uploadedBy, dbUserId))
+    .orderBy(sql`${boardAssets.createdAt} DESC`);
+
+  return { success: true, data: assets };
 }

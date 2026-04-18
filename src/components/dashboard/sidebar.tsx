@@ -20,6 +20,7 @@ import {
   Settings,
   Star,
   Clock,
+  Image,
 } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { APP_NAME, ROUTES } from "@/lib/constants";
@@ -66,6 +67,7 @@ export function Sidebar({ teamName = "Personal", userEmail }: SidebarProps) {
   const activeFilter = searchParams.get("filter") ?? null;
 
   const isSettingsActive = pathname === ROUTES.SETTINGS;
+  const isMediaActive = pathname === ROUTES.MEDIA;
 
   return (
     <aside className="flex h-screen w-[240px] flex-col border-r border-border/50 bg-sidebar-bg text-sidebar-foreground">
@@ -124,6 +126,20 @@ export function Sidebar({ teamName = "Personal", userEmail }: SidebarProps) {
         >
           <Settings className="h-4 w-4 flex-shrink-0" />
           Settings
+        </Link>
+
+        {/* Media Vault */}
+        <Link
+          href={ROUTES.MEDIA}
+          className={cn(
+            "flex items-center gap-2.5 rounded-lg px-3 py-2 mt-1 text-sm font-medium transition-colors",
+            isMediaActive
+              ? "bg-sidebar-active text-sidebar-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-sidebar-foreground"
+          )}
+        >
+          <Image className="h-4 w-4 flex-shrink-0" />
+          Media Vault
         </Link>
       </nav>
 

@@ -27,8 +27,8 @@
  * ```
  */
 
-import { useCallback, useRef } from "react";
-import type { TLAsset, TLAssetStore } from "tldraw";
+import { useCallback, useRef, useMemo } from "react";
+import type { TLAsset, TLAssetStore, Editor } from "tldraw";
 import type { WhiteboardMode } from "@/hooks/use-yjs-sync";
 import { uploadFiles } from "@/lib/uploadthing";
 import { checkUploadCapacity, recordAsset, deleteAssets } from "@/actions/assets";
@@ -50,6 +50,7 @@ export interface UploadCallbacks {
 interface UseAssetStoreOptions extends UploadCallbacks {
   mode: WhiteboardMode;
   boardId: string;
+  editor?: Editor | null;
 }
 
 // ─── Guest: base64 conversion ────────────────────────────────────────────────
@@ -88,6 +89,7 @@ export function useAssetStore({
   onUploadProgress,
   onUploadComplete,
   onUploadError,
+  editor,
 }: UseAssetStoreOptions): TLAssetStore {
   // Use a stable ref for the callbacks to avoid recreating the store object
   // every time the parent re-renders with new callback references
@@ -104,6 +106,9 @@ export function useAssetStore({
 
   const boardIdRef = useRef(boardId);
   boardIdRef.current = boardId;
+
+  const editorRef = useRef<Editor | null>(null);
+  editorRef.current = editor ?? null;
 
   /**
    * upload() — called by tldraw when the user drops/pastes an image.
@@ -145,11 +150,46 @@ export function useAssetStore({
       // 1. Pre-flight: check storage quota
       const capacityCheck = await checkUploadCapacity(file.size);
       if (!capacityCheck.success || !capacityCheck.data?.hasCapacity) {
-        const msg = capacityCheck.success
-          ? "Storage limit reached (100MB). Delete some images to free up space."
-          : (capacityCheck.error ?? "Could not check storage quota.");
-        error?.(uploadId, msg);
-        throw new Error(msg);
+        // Fallback to local storage
+        try {
+          const limitBytes = UPLOAD.MAX_LOCAL_STORAGE_MB * 1024 * 1024;
+          const localListStr = localStorage.getItem("sketchboard-local-media-list");
+          const localList = localListStr ? JSON.parse(localListStr) : [];
+          const currentLocalUsage = localList.reduce((acc: number, item: any) => acc + (item.fileSize || 0), 0);
+
+          if (currentLocalUsage + file.size > limitBytes) {
+            const msg = `Storage limit reached: Cloud Vault is full (20MB) and Local Storage (5MB limit) is full. No more media can be saved.`;
+            error?.(uploadId, msg);
+            throw new Error(msg);
+          }
+
+          // Save locally
+          start?.(uploadId, file.name);
+          progress?.(uploadId, 30);
+          const dataUrl = await fileToDataUrl(file);
+          progress?.(uploadId, 70);
+
+          const metadata = {
+            id: uploadId,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            createdAt: new Date().toISOString(),
+            boardId: boardIdRef.current,
+          };
+
+          localList.push(metadata);
+          localStorage.setItem("sketchboard-local-media-list", JSON.stringify(localList));
+          localStorage.setItem(`sketchboard-local-media-data-${uploadId}`, dataUrl);
+
+          progress?.(uploadId, 100);
+          complete?.(uploadId, dataUrl);
+          return { src: dataUrl };
+        } catch (localErr) {
+          const msg = localErr instanceof Error ? localErr.message : "Failed to store image locally";
+          error?.(uploadId, msg);
+          throw localErr;
+        }
       }
 
       // 2. Start upload notification
@@ -217,14 +257,48 @@ export function useAssetStore({
    * Auth mode: remove the DB record (CDN file has its own TTL)
    */
   const remove = useCallback(async (assetIds: readonly string[]): Promise<void> => {
-    if (modeRef.current !== "auth" || assetIds.length === 0) return;
+    if (assetIds.length === 0) return;
 
-    // We don't have the URLs at this point, only tldraw asset IDs.
-    // In Phase 8 we can look these up; for now, log for observability.
-    console.log("[useAssetStore] Assets removed from canvas:", assetIds);
-    // deleteAssets() takes URLs; this will be wired in Phase 8
-    // when we have the URL-to-assetId mapping available.
+    // Clean up local storage assets if present
+    try {
+      const localListStr = localStorage.getItem("sketchboard-local-media-list");
+      if (localListStr) {
+        let localList = JSON.parse(localListStr) as Array<{ id: string }>;
+        const initialLen = localList.length;
+        localList = localList.filter((item) => {
+          const match = assetIds.includes(item.id);
+          if (match) {
+            localStorage.removeItem(`sketchboard-local-media-data-${item.id}`);
+          }
+          return !match;
+        });
+        if (localList.length !== initialLen) {
+          localStorage.setItem("sketchboard-local-media-list", JSON.stringify(localList));
+        }
+      }
+    } catch (e) {
+      console.warn("[useAssetStore] Failed to clean up local storage assets:", e);
+    }
+
+    if (modeRef.current !== "auth") return;
+
+    const urls: string[] = [];
+    if (editorRef.current) {
+      for (const id of assetIds) {
+        const asset = editorRef.current.getAsset(id as any);
+        if (asset && asset.props && "src" in asset.props && typeof asset.props.src === "string") {
+          if (!asset.props.src.startsWith("data:")) {
+            urls.push(asset.props.src);
+          }
+        }
+      }
+    }
+
+    if (urls.length > 0) {
+      console.log("[useAssetStore] Assets removed from canvas, deleting from cloud:", urls);
+      await deleteAssets(urls);
+    }
   }, []);
 
-  return { upload, resolve, remove };
+  return useMemo(() => ({ upload, resolve, remove }), [upload, resolve, remove]);
 }
