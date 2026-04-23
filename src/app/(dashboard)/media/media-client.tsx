@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { deleteAssets, recordAsset } from "@/actions/assets";
 import { uploadFiles } from "@/lib/uploadthing";
 import { UPLOAD } from "@/lib/constants";
+import { MediaDeleteDialog } from "@/components/dashboard/media-delete-dialog";
 
 interface CloudAsset {
   id: string;
@@ -49,6 +50,8 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
   const [selectedAsset, setSelectedAsset] = useState<{ url: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [deleteCloudUrl, setDeleteCloudUrl] = useState<string | null>(null);
+  const [deleteLocalId, setDeleteLocalId] = useState<string | null>(null);
 
   // Load local storage assets and compute size
   const loadLocalAssets = () => {
@@ -80,8 +83,13 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const handleDeleteCloud = async (url: string) => {
-    if (!confirm("Are you sure you want to delete this image from the cloud? This will also remove it from any boards using it.")) return;
+  const handleDeleteCloud = (url: string) => {
+    setDeleteCloudUrl(url);
+  };
+
+  const handleDeleteCloudConfirm = async () => {
+    if (!deleteCloudUrl) return;
+    const url = deleteCloudUrl;
 
     startTransition(async () => {
       const res = await deleteAssets([url]);
@@ -102,6 +110,7 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
             };
           });
         }
+        setDeleteCloudUrl(null);
       } else {
         alert(res.error ?? "Failed to delete asset");
       }
@@ -109,7 +118,12 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
   };
 
   const handleDeleteLocal = (id: string) => {
-    if (!confirm("Are you sure you want to delete this locally stored image? It will be removed from your canvas.")) return;
+    setDeleteLocalId(id);
+  };
+
+  const handleDeleteLocalConfirm = () => {
+    if (!deleteLocalId) return;
+    const id = deleteLocalId;
 
     try {
       const listStr = localStorage.getItem("sketchboard-local-media-list");
@@ -120,6 +134,7 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
         localStorage.removeItem(`sketchboard-local-media-data-${id}`);
         loadLocalAssets();
       }
+      setDeleteLocalId(null);
     } catch (e) {
       console.error(e);
       alert("Failed to delete local asset");
@@ -441,6 +456,25 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
           </div>
         </div>
       )}
+
+      {/* Cloud Delete Confirmation Dialog */}
+      <MediaDeleteDialog
+        open={deleteCloudUrl !== null}
+        onClose={() => setDeleteCloudUrl(null)}
+        onConfirm={handleDeleteCloudConfirm}
+        isPending={isPending}
+        title="Delete Cloud Backup"
+        description="Are you sure you want to delete this image from the cloud? This will also remove it from any boards using it."
+      />
+
+      {/* Local Delete Confirmation Dialog */}
+      <MediaDeleteDialog
+        open={deleteLocalId !== null}
+        onClose={() => setDeleteLocalId(null)}
+        onConfirm={handleDeleteLocalConfirm}
+        title="Delete Local Image"
+        description="Are you sure you want to delete this locally stored image? It will be removed from your canvas."
+      />
     </div>
   );
 }

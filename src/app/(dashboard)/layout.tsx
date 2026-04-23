@@ -19,19 +19,15 @@ export default async function DashboardLayout({
   const user = await currentUser();
   if (!user) redirect(ROUTES.SIGN_IN);
 
-  // Fetch teams for sidebar workspace display
-  const teamsResult = await getUserTeams();
-  const teams = teamsResult.success ? teamsResult.data : [];
-  const personalTeam = teams.find((t) => t.isPersonal);
-
-  const primaryEmail = user.emailAddresses?.[0]?.emailAddress;
+  const userName = user.username || `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || "User";
+  const avatarUrl = user.imageUrl;
 
   return (
     <div className="flex h-screen bg-background">
       <Suspense>
         <Sidebar
-          teamName={personalTeam?.name ?? "Personal"}
-          userEmail={primaryEmail}
+          userName={userName}
+          avatarUrl={avatarUrl}
         />
       </Suspense>
 

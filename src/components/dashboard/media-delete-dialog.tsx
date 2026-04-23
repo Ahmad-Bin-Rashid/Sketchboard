@@ -1,54 +1,34 @@
 "use client";
 
-/**
- * DeleteDialog — confirmation modal for deleting a board.
- *
- * Requires the user to type the board name to confirm deletion,
- * preventing accidental deletes. Calls deleteBoard() server action.
- */
-
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
-import { deleteBoard } from "@/actions/board";
 
-interface DeleteDialogProps {
-  boardId: string;
-  boardName: string;
+interface MediaDeleteDialogProps {
   open: boolean;
   onClose: () => void;
+  onConfirm: () => void;
+  isPending?: boolean;
+  title?: string;
+  description?: string;
 }
 
-export function DeleteDialog({
-  boardId,
-  boardName,
+export function MediaDeleteDialog({
   open,
   onClose,
-}: DeleteDialogProps) {
-  const [confirmText, setConfirmText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
+  onConfirm,
+  isPending = false,
+  title = "Delete Media",
+  description = "Are you sure you want to delete this media? This action is permanent and cannot be undone.",
+}: MediaDeleteDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (open) {
-      setError(null);
       dialogRef.current?.showModal();
     } else {
       dialogRef.current?.close();
     }
   }, [open]);
-
-  const handleDelete = () => {
-    startTransition(async () => {
-      const result = await deleteBoard(boardId);
-      if (result.success) {
-        onClose();
-      } else {
-        setError(result.error);
-      }
-    });
-  };
 
   const handleClose = () => {
     if (!isPending) onClose();
@@ -65,14 +45,10 @@ export function DeleteDialog({
         <AlertTriangle className="h-5 w-5 text-destructive" />
       </div>
 
-      <h2 className="mb-1 text-base font-semibold">Delete Board</h2>
+      <h2 className="mb-1 text-base font-semibold">{title}</h2>
       <p className="mb-6 text-sm text-muted-foreground">
-        This action is permanent and cannot be undone. All board content and uploaded images will be deleted.
+        {description}
       </p>
-
-      {error && (
-        <p className="mt-1.5 text-xs text-destructive mb-3">{error}</p>
-      )}
 
       <div className="flex justify-end gap-2">
         <button
@@ -85,11 +61,11 @@ export function DeleteDialog({
         </button>
         <button
           type="button"
-          onClick={handleDelete}
+          onClick={onConfirm}
           disabled={isPending}
           className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-40"
         >
-          {isPending ? "Deleting…" : "Delete Board"}
+          {isPending ? "Deleting…" : "Delete"}
         </button>
       </div>
     </dialog>

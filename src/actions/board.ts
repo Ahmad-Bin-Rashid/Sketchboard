@@ -26,6 +26,7 @@ import {
   teamMembers,
   teams,
   users,
+  boardAssets,
 } from "@/lib/db/schema";
 import type { ActionResult, BoardWithDetails, UserRole } from "@/types";
 import { ROUTES } from "@/lib/constants";
@@ -338,6 +339,37 @@ export async function deleteBoard(boardId: string): Promise<ActionResult<void>> 
     return { success: false, error: "Only owners and admins can delete boards" };
   }
 
+  // 1. Fetch associated media URLs to delete from Uploadthing
+  const assetsToDelete = await db
+    .select({ url: boardAssets.url })
+    .from(boardAssets)
+    .where(eq(boardAssets.boardId, boardId));
+
+  if (assetsToDelete.length > 0) {
+    const urls = assetsToDelete.map((a) => a.url);
+    const keysToDelete: string[] = [];
+    for (const url of urls) {
+      const key = url.split("/f/")[1] || url.substring(url.lastIndexOf("/") + 1);
+      if (key) {
+        keysToDelete.push(key);
+      }
+    }
+
+    if (keysToDelete.length > 0) {
+      try {
+        const { UTApi } = await import("uploadthing/server");
+        const utapi = new UTApi();
+        await utapi.deleteFiles(keysToDelete);
+      } catch (err) {
+        console.error("[deleteBoard] Failed to delete files from Uploadthing:", err);
+      }
+    }
+
+    // 2. Delete assets from database
+    await db.delete(boardAssets).where(eq(boardAssets.boardId, boardId));
+  }
+
+  // 3. Delete the board
   await db.delete(boards).where(eq(boards.id, boardId));
 
   revalidatePath(ROUTES.DASHBOARD);
