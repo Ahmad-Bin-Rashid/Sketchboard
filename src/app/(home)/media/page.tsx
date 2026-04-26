@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { currentUser } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { ROUTES } from "@/lib/constants";
 import { getUserAssets, getStorageUsage } from "@/actions/assets";
 import { MediaClient } from "./media-client";
 
@@ -14,17 +12,22 @@ export const metadata: Metadata = {
 
 export default async function MediaPage() {
   const user = await currentUser();
-  if (!user) redirect(ROUTES.SIGN_IN);
+  const isGuest = !user;
 
-  const [assetsResult, storageResult] = await Promise.all([
-    getUserAssets(),
-    getStorageUsage(),
-  ]);
+  let initialAssets: any[] = [];
+  let storage = { usedBytes: 0, maxBytes: 20 * 1024 * 1024, usedMB: 0, maxMB: 20, percentUsed: 0, hasCapacity: true };
 
-  const initialAssets = assetsResult.success ? assetsResult.data : [];
-  const storage = storageResult.success
-    ? storageResult.data
-    : { usedBytes: 0, maxBytes: 20 * 1024 * 1024, usedMB: 0, maxMB: 20, percentUsed: 0, hasCapacity: true };
+  if (!isGuest) {
+    const [assetsResult, storageResult] = await Promise.all([
+      getUserAssets(),
+      getStorageUsage(),
+    ]);
+
+    initialAssets = assetsResult.success ? assetsResult.data : [];
+    if (storageResult.success) {
+      storage = storageResult.data;
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
@@ -35,7 +38,7 @@ export default async function MediaPage() {
         </p>
       </div>
 
-      <MediaClient initialCloudAssets={initialAssets} initialStorage={storage} />
+      <MediaClient initialCloudAssets={initialAssets} initialStorage={storage} isGuest={isGuest} />
     </div>
   );
 }

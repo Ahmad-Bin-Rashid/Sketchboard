@@ -10,12 +10,15 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { AlertTriangle } from "lucide-react";
 import { deleteBoard } from "@/actions/board";
+import { deleteGuestBoard } from "@/lib/local-board-store";
 
 interface DeleteDialogProps {
   boardId: string;
   boardName: string;
   open: boolean;
   onClose: () => void;
+  isLocal?: boolean;
+  onSuccess?: () => void;
 }
 
 export function DeleteDialog({
@@ -23,6 +26,8 @@ export function DeleteDialog({
   boardName,
   open,
   onClose,
+  isLocal,
+  onSuccess,
 }: DeleteDialogProps) {
   const [confirmText, setConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +45,17 @@ export function DeleteDialog({
   }, [open]);
 
   const handleDelete = () => {
+    if (isLocal) {
+      try {
+        deleteGuestBoard(boardId);
+        onSuccess?.();
+        onClose();
+      } catch (err: any) {
+        setError(err.message || "Failed to delete local board");
+      }
+      return;
+    }
+
     startTransition(async () => {
       const result = await deleteBoard(boardId);
       if (result.success) {

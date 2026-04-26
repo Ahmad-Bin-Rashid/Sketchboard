@@ -138,25 +138,14 @@ export function BoardHeader({
       {/* ─── Left: Nav + Board Name ───────────────────────────── */}
       <div className="pointer-events-auto flex items-center gap-2">
         {/* Back / Home button */}
-        {isGuest ? (
-          <Link
-            href={ROUTES.HOME}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-panel-bg text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-surface-hover"
-            style={{ border: "1px solid var(--panel-border)" }}
-            aria-label="Go to home"
-          >
-            <Home className="h-4 w-4" />
-          </Link>
-        ) : (
-          <Link
-            href={ROUTES.DASHBOARD}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-panel-bg text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-surface-hover"
-            style={{ border: "1px solid var(--panel-border)" }}
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        )}
+        <Link
+          href={ROUTES.HOME}
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-panel-bg text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-surface-hover"
+          style={{ border: "1px solid var(--panel-border)" }}
+          aria-label={isGuest ? "Go to home" : "Back to home"}
+        >
+          {isGuest ? <Home className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
+        </Link>
 
         {/* Board name pill */}
         <div

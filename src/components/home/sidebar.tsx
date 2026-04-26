@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Image, Menu, ChevronRight, ChevronLeft } from "lucide-react";
+import { LayoutGrid, Image, Menu } from "lucide-react";
 import { APP_NAME, ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { getGuestIdentity } from "@/lib/guest";
 
 interface SidebarProps {
   userName?: string;
@@ -17,7 +18,7 @@ const NAV_ITEMS = [
     id: "boards",
     label: "Boards",
     icon: LayoutGrid,
-    href: ROUTES.DASHBOARD,
+    href: ROUTES.HOME,
   },
   {
     id: "media",
@@ -30,6 +31,25 @@ const NAV_ITEMS = [
 export function Sidebar({ userName = "User", avatarUrl }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [displayName, setDisplayName] = useState(userName);
+  const [displayAvatar, setDisplayAvatar] = useState(avatarUrl || "/user-avatar.svg");
+
+  useEffect(() => {
+    const updateName = () => {
+      if (avatarUrl === "/user-avatar.svg" || !avatarUrl) {
+        const identity = getGuestIdentity();
+        setDisplayName(identity.guestName);
+        setDisplayAvatar("/user-avatar.svg");
+      } else {
+        setDisplayName(userName);
+        setDisplayAvatar(avatarUrl);
+      }
+    };
+
+    updateName();
+    window.addEventListener("guest-name-updated", updateName);
+    return () => window.removeEventListener("guest-name-updated", updateName);
+  }, [userName, avatarUrl, pathname]);
 
   return (
     <aside
@@ -41,7 +61,7 @@ export function Sidebar({ userName = "User", avatarUrl }: SidebarProps) {
       {/* Top Header Row: Logo & Toggle Button */}
       <div className={cn("flex h-14 items-center px-4", isCollapsed ? "justify-center" : "justify-between")}>
         {!isCollapsed && (
-          <Link href={ROUTES.DASHBOARD} className="flex items-center gap-2.5">
+          <Link href={ROUTES.HOME} className="flex items-center gap-2.5">
             {/* Logo mark — sage green */}
             <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
               <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-white" fill="currentColor">
@@ -68,10 +88,9 @@ export function Sidebar({ userName = "User", avatarUrl }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {NAV_ITEMS.map((item) => {
           // Check if active:
-          // Boards is active if path is /dashboard or starts with board (except /media)
           const isActive =
             item.id === "boards"
-              ? pathname === ROUTES.DASHBOARD || pathname.startsWith("/board/")
+              ? pathname === ROUTES.HOME || pathname.startsWith("/board/")
               : pathname === ROUTES.MEDIA;
 
           return (
@@ -90,6 +109,7 @@ export function Sidebar({ userName = "User", avatarUrl }: SidebarProps) {
               <item.icon className="h-4.5 w-4.5 flex-shrink-0" />
               {!isCollapsed && <span>{item.label}</span>}
 
+              
             </Link>
           );
         })}
@@ -100,36 +120,37 @@ export function Sidebar({ userName = "User", avatarUrl }: SidebarProps) {
         <Link
           href={ROUTES.SETTINGS}
           className={cn(
-            "flex items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-sidebar-hover transition-colors group relative",
+            "flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-sidebar-hover transition-colors group relative",
             pathname === ROUTES.SETTINGS ? "bg-sidebar-active text-sidebar-foreground" : "text-sidebar-foreground/70 hover:text-sidebar-foreground",
             isCollapsed ? "justify-center" : ""
           )}
           title={isCollapsed ? "Settings" : undefined}
         >
-          {avatarUrl ? (
+          {displayAvatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={avatarUrl}
-              alt={userName}
-              className="h-7 w-7 flex-shrink-0 rounded-full object-cover"
+              src={displayAvatar}
+              alt={displayName}
+              className="h-8 w-8 flex-shrink-0 rounded-full object-cover bg-surface-hover "
             />
           ) : (
-            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-semibold text-primary">
-              {userName[0]?.toUpperCase() ?? "U"}
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-light text-xs font-semibold text-primary">
+              {displayName[0]?.toUpperCase() ?? "U"}
             </div>
           )}
           
           {!isCollapsed && (
             <div className="flex flex-col min-w-0 text-left">
-              <span className="truncate text-xs font-medium text-sidebar-foreground">
-                {userName}
+              <span className="truncate text-sm font-medium text-sidebar-foreground">
+                {displayName}
               </span>
-              <span className="text-[10px] text-sidebar-foreground/50">
+              <span className="text-[12px] text-sidebar-foreground/50">
                 Settings
               </span>
             </div>
           )}
 
+          
         </Link>
       </div>
     </aside>

@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 import { deleteAssets, recordAsset } from "@/actions/assets";
 import { uploadFiles } from "@/lib/uploadthing";
 import { UPLOAD } from "@/lib/constants";
-import { MediaDeleteDialog } from "@/components/dashboard/media-delete-dialog";
+import { MediaDeleteDialog } from "@/components/home/media-delete-dialog";
+import Link from "next/link";
+import { ROUTES } from "@/lib/constants";
 
 interface CloudAsset {
   id: string;
@@ -40,9 +42,10 @@ interface StorageUsage {
 interface MediaClientProps {
   initialCloudAssets: CloudAsset[];
   initialStorage: StorageUsage;
+  isGuest?: boolean;
 }
 
-export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientProps) {
+export function MediaClient({ initialCloudAssets, initialStorage, isGuest = false }: MediaClientProps) {
   const [cloudAssets, setCloudAssets] = useState<CloudAsset[]>(initialCloudAssets);
   const [localAssets, setLocalAssets] = useState<LocalAsset[]>([]);
   const [cloudStorage, setCloudStorage] = useState<StorageUsage>(initialStorage);
@@ -251,34 +254,36 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
   return (
     <div className="space-y-8">
       {/* Storage Meters */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className={cn("grid grid-cols-1 gap-4", !isGuest && "md:grid-cols-2")}>
         {/* Cloud Backups Limit */}
-        <div className="rounded-2xl border border-card-border bg-card p-5">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-light">
-              <Cloud className="h-4.5 w-4.5 text-primary" />
+        {!isGuest && (
+          <div className="rounded-2xl border border-card-border bg-card p-5">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-light">
+                <Cloud className="h-4.5 w-4.5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Cloud Vault Storage</p>
+                <p className="text-xs text-muted-foreground">Permanent cloud backups for boards</p>
+              </div>
+              <div className="ml-auto text-right">
+                <p className="text-sm font-semibold">{cloudStorage.usedMB.toFixed(2)} MB</p>
+                <p className="text-xs text-muted-foreground">of {cloudStorage.maxMB} MB</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium">Cloud Vault Storage</p>
-              <p className="text-xs text-muted-foreground">Permanent cloud backups for boards</p>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn("h-full rounded-full transition-all duration-500 bg-primary")}
+                style={{ width: `${cloudStorage.percentUsed}%` }}
+              />
             </div>
-            <div className="ml-auto text-right">
-              <p className="text-sm font-semibold">{cloudStorage.usedMB.toFixed(2)} MB</p>
-              <p className="text-xs text-muted-foreground">of {cloudStorage.maxMB} MB</p>
-            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {cloudStorage.percentUsed >= 100
+                ? "Cloud limit reached! New media will fallback to local storage."
+                : `${(cloudStorage.maxMB - cloudStorage.usedMB).toFixed(2)} MB cloud capacity remaining`}
+            </p>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn("h-full rounded-full transition-all duration-500 bg-primary")}
-              style={{ width: `${cloudStorage.percentUsed}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {cloudStorage.percentUsed >= 100
-              ? "Cloud limit reached! New media will fallback to local storage."
-              : `${(cloudStorage.maxMB - cloudStorage.usedMB).toFixed(2)} MB cloud capacity remaining`}
-          </p>
-        </div>
+        )}
 
         {/* Local Storage Limit */}
         <div className="rounded-2xl border border-card-border bg-card p-5">
@@ -309,18 +314,29 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
               ? "Local storage full! Free space to add new canvas images."
               : `${(UPLOAD.MAX_LOCAL_STORAGE_MB - localUsageBytes / (1024 * 1024)).toFixed(2)} MB local storage remaining`}
           </p>
+
+          {isGuest && localPercent >= 100 && (
+            <div className="mt-4 rounded-xl bg-primary-light p-4 text-xs text-primary font-medium flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+              <span>Local storage limit reached. Sign up or log in to back up your boards to the cloud and upload more media.</span>
+              <div className="flex gap-3 flex-shrink-0">
+                <Link href={ROUTES.SIGN_IN} className="underline hover:text-primary-hover">Log In</Link>
+                <Link href={ROUTES.SIGN_UP} className="rounded bg-primary px-2.5 py-1 text-white font-medium hover:bg-primary-hover no-underline">Sign Up</Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Cloud Media Section */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <Cloud className="h-4 w-4" /> Cloud Vault Assets ({cloudAssets.length})
-        </h2>
-        
-        {cloudAssets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-12 text-center text-muted-foreground">
-            <ImageIcon className="h-10 w-10 text-muted-foreground/30 mb-2" />
+      {!isGuest && (
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Cloud className="h-4 w-4" /> Cloud Vault Assets ({cloudAssets.length})
+          </h2>
+          
+          {cloudAssets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-12 text-center text-muted-foreground">
+              <ImageIcon className="h-10 w-10 text-muted-foreground/30 mb-2" />
             <p className="text-sm font-medium">No cloud back-ups saved yet</p>
             <p className="text-xs text-muted-foreground mt-0.5">Images uploaded while within quota limits appear here.</p>
           </div>
@@ -371,6 +387,7 @@ export function MediaClient({ initialCloudAssets, initialStorage }: MediaClientP
           </div>
         )}
       </section>
+      )}
 
       {/* Local Storage Section */}
       <section className="space-y-4">

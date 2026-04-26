@@ -243,7 +243,7 @@ export async function createBoard(
     .returning({ id: boards.id });
 
   if (!skipRevalidate) {
-    revalidatePath(ROUTES.DASHBOARD);
+    revalidatePath(ROUTES.HOME);
   }
   return { success: true, data: { boardId: newBoard.id } };
 }
@@ -323,7 +323,7 @@ export async function renameBoard(
     .set({ name: trimmed, updatedAt: new Date() })
     .where(eq(boards.id, boardId));
 
-  revalidatePath(ROUTES.DASHBOARD);
+  revalidatePath(ROUTES.HOME);
   return { success: true, data: undefined };
 }
 
@@ -372,7 +372,7 @@ export async function deleteBoard(boardId: string): Promise<ActionResult<void>> 
   // 3. Delete the board
   await db.delete(boards).where(eq(boards.id, boardId));
 
-  revalidatePath(ROUTES.DASHBOARD);
+  revalidatePath(ROUTES.HOME);
   return { success: true, data: undefined };
 }
 
@@ -405,7 +405,7 @@ export async function duplicateBoard(
     })
     .returning({ id: boards.id });
 
-  revalidatePath(ROUTES.DASHBOARD);
+  revalidatePath(ROUTES.HOME);
   return { success: true, data: { newBoardId: copy.id } };
 }
 
@@ -436,13 +436,16 @@ export async function toggleFavorite(
       .where(
         and(eq(favorites.userId, user.id), eq(favorites.boardId, boardId))
       );
-    revalidatePath(ROUTES.DASHBOARD);
+    revalidatePath(ROUTES.HOME);
     return { success: true, data: { isFavorite: false } };
+  } else {
+    // Add to favorites
+    await db.insert(favorites).values({
+      userId: user.id,
+      boardId,
+    });
+    revalidatePath(ROUTES.HOME);
   }
-
-  // Add to favorites
-  await db.insert(favorites).values({ userId: user.id, boardId });
-  revalidatePath(ROUTES.DASHBOARD);
   return { success: true, data: { isFavorite: true } };
 }
 

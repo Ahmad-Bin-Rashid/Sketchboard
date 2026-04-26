@@ -12,10 +12,10 @@ export const APP_DESCRIPTION = "Real-time collaborative whiteboard — no sign-u
 // Single source of truth for all routes. Use these instead of raw strings.
 
 export const ROUTES = {
-  HOME: "/",
+  LANDING: "/",
   SIGN_IN: "/sign-in",
   SIGN_UP: "/sign-up",
-  DASHBOARD: "/dashboard",
+  HOME: "/home",
   BOARD: (boardId: string) => `/board/${boardId}` as const,
   SETTINGS: "/settings",
   MEDIA: "/media",

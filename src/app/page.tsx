@@ -23,7 +23,7 @@ export default async function HomePage() {
     <div className="flex min-h-screen flex-col bg-background">
       {/* ─── Navbar ──────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
@@ -39,10 +39,10 @@ export default async function HomePage() {
             {userId ? (
               <>
                 <Link
-                  href="/dashboard"
+                  href="/home"
                   className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Dashboard
+                  Home
                 </Link>
                 <div className="flex items-center justify-center">
                   <UserButton
@@ -142,8 +142,8 @@ export default async function HomePage() {
           {userId ? (
             <>
               {" "}· Signed in. Go to your{" "}
-              <Link href="/dashboard" className="text-primary hover:underline">
-                dashboard
+              <Link href="/home" className="text-primary hover:underline">
+                home
               </Link>{" "}
               to access your boards.
             </>
@@ -153,7 +153,7 @@ export default async function HomePage() {
               <Link href={ROUTES.SIGN_UP} className="text-primary hover:underline">
                 create an account
               </Link>{" "}
-              to access the dashboard and cloud saves.
+              to access cloud storage.
             </>
           )}
         </p>

@@ -1,15 +1,10 @@
 import { Suspense } from "react";
 import { currentUser } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/dashboard";
-import { getUserTeams } from "@/actions/team";
+import { Sidebar } from "@/components/home";
 import { ROUTES } from "@/lib/constants";
 
 /**
- * Dashboard layout — server component.
- *
- * Fetches the current user's team info to pass to the Sidebar.
- * Protects all dashboard routes — redirects to sign-in if not authenticated.
+ * Shared layout for authenticated and guest users inside dashboard/home sections.
  */
 export default async function DashboardLayout({
   children,
@@ -17,10 +12,12 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await currentUser();
-  if (!user) redirect(ROUTES.SIGN_IN);
 
-  const userName = user.username || `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || "User";
-  const avatarUrl = user.imageUrl;
+  // If authenticated, use Clerk details. Otherwise, use Guest defaults.
+  const userName = user 
+    ? (user.username || `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || "User")
+    : "Guest";
+  const avatarUrl = user ? user.imageUrl : "/user-avatar.svg";
 
   return (
     <div className="flex h-screen bg-background">

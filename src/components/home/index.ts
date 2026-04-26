@@ -1,8 +1,8 @@
 /**
- * Dashboard components barrel export.
+ * Home components barrel export.
  *
- * Import dashboard components from here:
- *   import { BoardCard, Sidebar, NewBoardButton } from "@/components/dashboard";
+ * Import home components from here:
+ *   import { BoardCard, Sidebar, NewBoardButton } from "@/components/home";
  */
 
 export { BoardCard } from "./board-card";

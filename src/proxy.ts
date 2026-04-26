@@ -23,6 +23,9 @@ const isPublicRoute = createRouteMatcher([
   "/api/liveblocks-auth",  // must be public — called by guests with no Clerk session
   "/api/uploadthing",      // Uploadthing handles its own auth
   "/board(.*)",
+  "/home(.*)",
+  "/media(.*)",
+  "/settings(.*)",
 ]);
 
 // If Clerk isn't configured, pass all requests through

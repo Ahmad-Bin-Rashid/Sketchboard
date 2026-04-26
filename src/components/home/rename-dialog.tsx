@@ -10,12 +10,15 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { renameBoard } from "@/actions/board";
+import { renameGuestBoard } from "@/lib/local-board-store";
 
 interface RenameDialogProps {
   boardId: string;
   currentName: string;
   open: boolean;
   onClose: () => void;
+  isLocal?: boolean;
+  onSuccess?: () => void;
 }
 
 export function RenameDialog({
@@ -23,6 +26,8 @@ export function RenameDialog({
   currentName,
   open,
   onClose,
+  isLocal,
+  onSuccess,
 }: RenameDialogProps) {
   const [name, setName] = useState(currentName);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +58,18 @@ export function RenameDialog({
       onClose();
       return;
     }
+
+    if (isLocal) {
+      try {
+        renameGuestBoard(boardId, trimmed);
+        onSuccess?.();
+        onClose();
+      } catch (err: any) {
+        setError(err.message || "Failed to rename local board");
+      }
+      return;
+    }
+
     startTransition(async () => {
       const result = await renameBoard(boardId, trimmed);
       if (result.success) {

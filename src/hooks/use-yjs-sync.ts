@@ -34,7 +34,7 @@ import { createLiveblocksClient } from "@/lib/liveblocks";
 import { TldrawYjsSync } from "@/lib/sync/tldraw-yjs-sync";
 import { AwarenessManager } from "@/lib/sync/awareness";
 import { useConnectionStore, type ConnectionStatus } from "@/lib/sync/connection";
-import { loadGuestBoard, saveGuestBoard } from "@/lib/local-board-store";
+import { loadGuestBoard, saveGuestBoard, deleteGuestBoard } from "@/lib/local-board-store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -209,6 +209,25 @@ export function useYjsSync({
               editor.loadSnapshot(saved);
             } catch (err) {
               console.error("[useYjsSync] Failed to load snapshot:", err);
+            }
+          }
+        } else if (mode === "auth") {
+          // Check if we need to seed the board from a guest local storage board
+          const params = new URLSearchParams(window.location.search);
+          const importLocalId = params.get("importLocal");
+          if (importLocalId) {
+            const saved = loadGuestBoard(importLocalId);
+            if (saved) {
+              try {
+                editor.loadSnapshot(saved);
+                console.log("[useYjsSync] Imported local storage board:", importLocalId);
+                // Clean up the local storage board and clear query params
+                deleteGuestBoard(importLocalId);
+                const cleanUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
+              } catch (err) {
+                console.error("[useYjsSync] Failed to import local board snapshot:", err);
+              }
             }
           }
         }

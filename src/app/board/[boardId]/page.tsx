@@ -36,7 +36,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
 
     if (!boardResult.success) {
       // Board not found or access denied — redirect to dashboard
-      redirect(ROUTES.DASHBOARD);
+      redirect(ROUTES.HOME);
     }
 
     // If getOrCreateBoard created a new board (guest URL → DB UUID),
