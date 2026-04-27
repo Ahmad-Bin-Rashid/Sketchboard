@@ -38,7 +38,7 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
+    <div className="mx-auto max-w-237 px-8 py-8">
       <div className="mb-8">
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -57,7 +57,7 @@ export default async function SettingsPage() {
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Profile
             </h2>
-            <div className="overflow-auto w-fit mx-auto rounded-2xl border border-card-border bg-card">
+            <div className="overflow-auto w-full mx-auto rounded-2xl border border-card-border bg-card">
               <UserProfile
                 routing="hash"
                 appearance={{

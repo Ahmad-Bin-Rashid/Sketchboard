@@ -43,6 +43,8 @@ import { useCursorBroadcast } from "@/hooks/use-cursor-broadcast";
 import { useActiveUsers } from "@/hooks/use-active-users";
 import { getGuestIdentity, hasSetGuestName } from "@/lib/guest";
 import { renameGuestBoard, getGuestBoardMeta } from "@/lib/local-board-store";
+import { renameBoard } from "@/actions/board";
+import type { UserRole } from "@/types";
 import { useAssetStore } from "@/lib/assets";
 import { BoardHeader } from "./board-header";
 import { ConnectionIndicator } from "./connection-indicator";
@@ -63,6 +65,8 @@ interface WhiteboardProps {
   userName?: string;
   /** Auth mode: Clerk avatar URL */
   avatarUrl?: string | null;
+  /** Auth mode: user's role on this board */
+  role?: UserRole;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -74,6 +78,7 @@ export function Whiteboard({
   userId,
   userName,
   avatarUrl,
+  role,
 }: WhiteboardProps) {
   const [editor, setEditor] = useState<Editor | null>(null);
 
@@ -268,14 +273,25 @@ export function Whiteboard({
   }, []);
 
   const handleBoardRename = useCallback(
-    (newName: string) => {
+    async (newName: string) => {
+      const prevName = boardName;
       setBoardName(newName);
       if (mode === "guest") {
         renameGuestBoard(boardId, newName);
+      } else {
+        try {
+          const result = await renameBoard(boardId, newName);
+          if (!result.success) {
+            console.error("[Whiteboard] Failed to rename board:", result.error);
+            setBoardName(prevName);
+          }
+        } catch (err) {
+          console.error("[Whiteboard] Error renaming board:", err);
+          setBoardName(prevName);
+        }
       }
-      // Auth mode: server action will be called here in Phase 7
     },
-    [boardId, mode]
+    [boardId, mode, boardName]
   );
 
   // ─── Render ──────────────────────────────────────────────────────────
@@ -309,6 +325,7 @@ export function Whiteboard({
         connectionStatus={connectionStatus}
         collaborators={collaborators}
         mode={mode}
+        role={role}
         editor={editor}
         guestName={mode === "guest" ? guestName : undefined}
         onRename={handleBoardRename}

@@ -35,7 +35,7 @@ import { ROUTES } from "@/lib/constants";
 import { type ConnectionStatus, getConnectionDotColor } from "@/lib/sync/connection";
 import { cn } from "@/lib/utils";
 import { ActiveUsersPanel } from "./active-users-panel";
-import type { CollaboratorInfo } from "@/types";
+import type { CollaboratorInfo, UserRole } from "@/types";
 import type { WhiteboardMode } from "@/hooks/use-yjs-sync";
 import type { Editor } from "tldraw";
 import { exportBoardAsFile, openImportFilePicker, type ImportResult } from "@/lib/board-export";
@@ -49,6 +49,8 @@ interface BoardHeaderProps {
   connectionStatus: ConnectionStatus;
   collaborators?: CollaboratorInfo[];
   mode?: WhiteboardMode;
+  /** Auth mode: user's role on this board */
+  role?: UserRole;
   /** tldraw editor — needed for export/import (guest mode) */
   editor?: Editor | null;
   /** Guest mode: the current guest's display name, shown in identity chip */
@@ -68,6 +70,7 @@ export function BoardHeader({
   connectionStatus,
   collaborators = [],
   mode = "guest",
+  role,
   editor,
   guestName,
   onRename,
@@ -75,6 +78,7 @@ export function BoardHeader({
 }: BoardHeaderProps) {
   const isConnected = connectionStatus === "connected";
   const isGuest = mode === "guest";
+  const canRename = isGuest || (mode === "auth" && role !== "viewer");
 
   // Inline board name editing state (guest mode)
   const [isEditingName, setIsEditingName] = useState(false);
@@ -114,7 +118,7 @@ export function BoardHeader({
   }, [editor, onRename]);
 
   const handleNameDoubleClick = () => {
-    if (!isGuest) return;
+    if (!canRename) return;
     setEditedName(boardName);
     setIsEditingName(true);
     setTimeout(() => nameInputRef.current?.select(), 50);
@@ -167,10 +171,10 @@ export function BoardHeader({
             <h1
               className={cn(
                 "max-w-50 truncate text-sm font-medium",
-                isGuest && "cursor-text select-none"
+                canRename && "cursor-text select-none"
               )}
               onDoubleClick={handleNameDoubleClick}
-              title={isGuest ? "Double-click to rename board" : boardName}
+              title={canRename ? "Double-click to rename board" : boardName}
             >
               {boardName}
             </h1>

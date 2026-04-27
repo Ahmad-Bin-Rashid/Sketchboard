@@ -53,6 +53,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
         userId={clerkId}
         userName={user?.fullName ?? user?.username ?? "User"}
         avatarUrl={user?.imageUrl ?? null}
+        role={boardResult.data.role}
       />
     );
   }

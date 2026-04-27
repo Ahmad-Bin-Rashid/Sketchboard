@@ -260,7 +260,7 @@ export async function createBoard(
  * Used by the board page in auth mode.
  */
 export async function getOrCreateBoard(boardId: string): Promise<
-  ActionResult<{ boardId: string; boardName: string; isNew: boolean }>
+  ActionResult<{ boardId: string; boardName: string; isNew: boolean; role: UserRole }>
 > {
   const user = await getCurrentDbUser();
   if (!user) return { success: false, error: "Not authenticated" };
@@ -281,7 +281,7 @@ export async function getOrCreateBoard(boardId: string): Promise<
       if (board[0]) {
         return {
           success: true,
-          data: { boardId: board[0].id, boardName: board[0].name, isNew: false },
+          data: { boardId: board[0].id, boardName: board[0].name, isNew: false, role },
         };
       }
     }
@@ -293,7 +293,7 @@ export async function getOrCreateBoard(boardId: string): Promise<
     if (!result.success) return result;
     return {
       success: true,
-      data: { boardId: result.data.boardId, boardName: "Untitled Board", isNew: true },
+      data: { boardId: result.data.boardId, boardName: "Untitled Board", isNew: true, role: "owner" },
     };
   }
 

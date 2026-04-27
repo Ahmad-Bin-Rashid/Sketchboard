@@ -12,6 +12,7 @@
 
 import { Whiteboard } from "@/components/whiteboard";
 import type { WhiteboardMode } from "@/hooks/use-yjs-sync";
+import type { UserRole } from "@/types";
 
 interface BoardCanvasProps {
   boardId: string;
@@ -20,6 +21,7 @@ interface BoardCanvasProps {
   userId?: string;
   userName?: string;
   avatarUrl?: string | null;
+  role?: UserRole;
 }
 
 export function BoardCanvas({
@@ -29,6 +31,7 @@ export function BoardCanvas({
   userId,
   userName,
   avatarUrl,
+  role,
 }: BoardCanvasProps) {
   return (
     <Whiteboard
@@ -38,6 +41,7 @@ export function BoardCanvas({
       userId={userId}
       userName={userName}
       avatarUrl={avatarUrl}
+      role={role}
     />
   );
 }
