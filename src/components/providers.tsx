@@ -16,6 +16,8 @@
  */
 
 import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider, useTheme } from "./theme-provider";
+import { dark } from "@clerk/themes";
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -23,15 +25,33 @@ interface ProvidersProps {
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-export function Providers({ children }: ProvidersProps) {
+function ClerkProviderWrapper({ children }: { children: React.ReactNode }) {
+  const { resolvedTheme } = useTheme();
+
   // Skip ClerkProvider if no valid key is configured (allows build to pass)
   if (!clerkKey || clerkKey.includes("placeholder")) {
     return <>{children}</>;
   }
 
   return (
-    <ClerkProvider afterSignOutUrl="/">
+    <ClerkProvider
+      afterSignOutUrl="/"
+      appearance={{
+        baseTheme: resolvedTheme === "dark" ? dark : undefined,
+        variables: {
+          colorPrimary: "#5b8a72",
+        },
+      }}
+    >
       {children}
     </ClerkProvider>
+  );
+}
+
+export function Providers({ children }: ProvidersProps) {
+  return (
+    <ThemeProvider>
+      <ClerkProviderWrapper>{children}</ClerkProviderWrapper>
+    </ThemeProvider>
   );
 }

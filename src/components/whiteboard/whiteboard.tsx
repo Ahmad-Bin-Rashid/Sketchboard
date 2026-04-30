@@ -46,6 +46,7 @@ import { renameGuestBoard, getGuestBoardMeta } from "@/lib/local-board-store";
 import { renameBoard } from "@/actions/board";
 import type { UserRole } from "@/types";
 import { useAssetStore } from "@/lib/assets";
+import { useTheme } from "@/components/theme-provider";
 import { BoardHeader } from "./board-header";
 import { ConnectionIndicator } from "./connection-indicator";
 import { RemoteCursors } from "./remote-cursors";
@@ -80,6 +81,7 @@ export function Whiteboard({
   avatarUrl,
   role,
 }: WhiteboardProps) {
+  const { theme } = useTheme();
   const [editor, setEditor] = useState<Editor | null>(null);
 
   // Board name can be changed inline by guests
@@ -263,6 +265,15 @@ export function Whiteboard({
     const timeoutId = setTimeout(migrateAssets, 2000);
     return () => clearTimeout(timeoutId);
   }, [editor, mode]);
+
+  // Sync theme changes to the tldraw editor preferences
+  useEffect(() => {
+    if (editor) {
+      editor.user.updateUserPreferences({
+        colorScheme: theme,
+      });
+    }
+  }, [editor, theme]);
 
   // ─── Event handlers ──────────────────────────────────────────────────
 

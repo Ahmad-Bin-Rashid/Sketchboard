@@ -11,10 +11,11 @@
  */
 
 import { useState, useTransition } from "react";
-import { HardDrive, Users, Mail, Loader2, X, UserMinus } from "lucide-react";
+import { HardDrive, Users, Mail, Loader2, X, UserMinus, Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { inviteMember, removeMember } from "@/actions/team";
 import type { TeamMemberWithUser, UserRole } from "@/types";
+import { useTheme } from "@/components/theme-provider";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -166,10 +167,63 @@ export function SettingsClient({
       ? "bg-amber-500"
       : "bg-primary";
 
+  const { theme, setTheme } = useTheme();
+
   return (
-    <>
-      {/* Workspace / Team Members hidden for minimal features */}
-      
+    <div className="flex flex-col gap-8">
+      {/* Appearance preference */}
+      <section>
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Appearance
+        </h2>
+        <div className="rounded-2xl border border-card-border bg-card p-5">
+          <div className="mb-4">
+            <h3 className="text-sm font-medium">Theme Preference</h3>
+            <p className="text-xs text-muted-foreground">
+              Choose how Sketchboard looks in your browser window.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <button
+              onClick={() => setTheme("light")}
+              className={cn(
+                "flex flex-col items-center justify-center gap-2 rounded-xl border p-4.5 text-center transition-all cursor-pointer hover:bg-surface-hover",
+                theme === "light"
+                  ? "border-primary bg-primary-light/35 text-primary"
+                  : "border-border text-foreground"
+              )}
+            >
+              <Sun className="h-5 w-5" />
+              <span className="text-xs font-semibold">Light</span>
+            </button>
+            <button
+              onClick={() => setTheme("dark")}
+              className={cn(
+                "flex flex-col items-center justify-center gap-2 rounded-xl border p-4.5 text-center transition-all cursor-pointer hover:bg-surface-hover",
+                theme === "dark"
+                  ? "border-primary bg-primary-light/35 text-primary"
+                  : "border-border text-foreground"
+              )}
+            >
+              <Moon className="h-5 w-5" />
+              <span className="text-xs font-semibold">Dark</span>
+            </button>
+            <button
+              onClick={() => setTheme("system")}
+              className={cn(
+                "flex flex-col items-center justify-center gap-2 rounded-xl border p-4.5 text-center transition-all cursor-pointer hover:bg-surface-hover",
+                theme === "system"
+                  ? "border-primary bg-primary-light/35 text-primary"
+                  : "border-border text-foreground"
+              )}
+            >
+              <Monitor className="h-5 w-5" />
+              <span className="text-xs font-semibold">System</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Storage usage */}
       <section>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -216,6 +270,6 @@ export function SettingsClient({
           </p>
         </div>
       </section>
-    </>
+    </div>
   );
 }

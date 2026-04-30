@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
+    "@clerk/themes": "^2.4.57",
     "@liveblocks/client": "^3.23.0",
     "@liveblocks/node": "^3.23.0",
     "@liveblocks/react": "^3.23.0",
