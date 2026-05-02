@@ -38,8 +38,8 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-237 px-8 py-8">
-      <div className="mb-8">
+    <div className="mx-auto max-w-237 px-4 sm:px-8 py-6 sm:py-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {isGuest

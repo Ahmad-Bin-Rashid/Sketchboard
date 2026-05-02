@@ -313,3 +313,24 @@ body {
 .animate-scale-in {
   animation: scale-in 0.15s ease-out;
 }
+
+/* Screen rotation lock overlay for mobile portrait viewports */
+.portrait-rotate-overlay {
+  display: none;
+}
+
+@media (max-width: 820px) and (orientation: portrait) {
+  .portrait-rotate-overlay {
+    display: flex !important;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--background);
+    color: var(--foreground);
+    padding: 24px;
+    text-align: center;
+  }
+}

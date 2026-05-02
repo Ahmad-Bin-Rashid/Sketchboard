@@ -54,7 +54,7 @@ export default async function HomePage() {
           <nav className="flex items-center gap-4">
             <Link
               href="/home"
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-lg px-0 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Home
             </Link>
@@ -73,13 +73,13 @@ export default async function HomePage() {
               <>
                 <Link
                   href={ROUTES.SIGN_IN}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  className="hidden sm:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
                   Sign In
                 </Link>
                 <Link
                   href={ROUTES.SIGN_UP}
-                  className="rounded-xl bg-primary px-4.5 py-2 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/10 hover:bg-primary-hover hover:shadow-primary/20 transition-all hover:scale-[1.02] duration-200"
+                  className="rounded-xl bg-primary px-3 sm:px-4.5 py-2 text-xs sm:text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/10 hover:bg-primary-hover hover:shadow-primary/20 transition-all hover:scale-[1.02] duration-200"
                 >
                   Get Started
                 </Link>

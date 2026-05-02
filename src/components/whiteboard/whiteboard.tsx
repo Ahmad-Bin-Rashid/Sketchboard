@@ -309,6 +309,20 @@ export function Whiteboard({
 
   return (
     <div className="relative h-screen w-screen">
+      {/* Screen rotation prompt overlay for mobile portrait */}
+      <div className="portrait-rotate-overlay select-none flex-col gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-light text-primary animate-bounce">
+          <svg viewBox="0 0 24 24" className="h-8 w-8 rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+            <line x1="12" y1="18" x2="12.01" y2="18" />
+          </svg>
+        </div>
+        <h2 className="text-lg font-bold">Rotate your device</h2>
+        <p className="max-w-xs text-xs text-muted-foreground leading-relaxed">
+          This sketch canvas is optimized for landscape viewing. Please rotate your device to start drawing.
+        </p>
+      </div>
+
       {/* Guest name modal — shown on first visit before canvas interaction */}
       {showNameModal && mode === "guest" && (
         <GuestNameModal onConfirm={handleNameConfirmed} />

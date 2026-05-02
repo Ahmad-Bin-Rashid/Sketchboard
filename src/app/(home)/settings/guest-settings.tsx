@@ -7,10 +7,12 @@ import { getGuestIdentity, setGuestName } from "@/lib/guest";
 import { LogIn, UserPlus } from "lucide-react";
 
 export function GuestSettings() {
+  const [mounted, setMounted] = useState(false);
   const [guestName, setGuestNameState] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
+    setMounted(true);
     const identity = getGuestIdentity();
     setGuestNameState(identity.guestName);
   }, []);
@@ -61,7 +63,7 @@ export function GuestSettings() {
 
             <button
               type="submit"
-              disabled={!guestName.trim()}
+              disabled={!mounted || !guestName.trim()}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
               Save Username

@@ -30,8 +30,8 @@ export default async function MediaPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
-      <div className="mb-8">
+    <div className="mx-auto max-w-5xl px-4 sm:px-8 py-6 sm:py-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-xl font-semibold tracking-tight">Media Vault</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           View, upload, and manage images used on your whiteboards

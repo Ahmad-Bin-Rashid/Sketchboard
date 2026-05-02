@@ -93,7 +93,7 @@ export function HomeContent({
   );
 
   return (
-    <div className="flex min-h-full flex-col px-8 py-6">
+    <div className="flex min-h-full flex-col px-4 sm:px-8 py-6">
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight">
