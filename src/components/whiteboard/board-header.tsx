@@ -37,8 +37,10 @@ import { cn } from "@/lib/utils";
 import { ActiveUsersPanel } from "./active-users-panel";
 import type { CollaboratorInfo, UserRole } from "@/types";
 import type { WhiteboardMode } from "@/hooks/use-yjs-sync";
-import type { Editor } from "tldraw";
+import type { CustomShape } from "@/types/whiteboard";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { exportBoardAsFile, openImportFilePicker, type ImportResult } from "@/lib/board-export";
+import * as Y from "yjs";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,8 +53,8 @@ interface BoardHeaderProps {
   mode?: WhiteboardMode;
   /** Auth mode: user's role on this board */
   role?: UserRole;
-  /** tldraw editor — needed for export/import (guest mode) */
-  editor?: Editor | null;
+  /** Custom canvas shapes map for synchronization */
+  shapesMap: Y.Map<CustomShape> | null;
   /** Guest mode: the current guest's display name, shown in identity chip */
   guestName?: string;
   /** Called when the user changes the board name (guest mode inline rename) */
@@ -71,7 +73,7 @@ export function BoardHeader({
   collaborators = [],
   mode = "guest",
   role,
-  editor,
+  shapesMap,
   guestName,
   onRename,
   onChangeName,
@@ -98,14 +100,24 @@ export function BoardHeader({
   }, [boardId]);
 
   const handleExport = useCallback(() => {
-    if (!editor) return;
-    exportBoardAsFile(editor, boardId, boardName);
-  }, [editor, boardId, boardName]);
+    const store = useWhiteboardStore.getState();
+    const shapesList = Object.values(store.shapes);
+    exportBoardAsFile(shapesList, boardId, boardName);
+  }, [boardId, boardName]);
 
   const handleImport = useCallback(() => {
-    if (!editor) return;
-    openImportFilePicker(editor, (result: ImportResult) => {
-      if (result.ok) {
+    if (!shapesMap) return;
+    openImportFilePicker((result: ImportResult) => {
+      if (result.ok && result.shapes) {
+        const doc = shapesMap.doc;
+        if (doc) {
+          doc.transact(() => {
+            shapesMap.clear();
+            result.shapes?.forEach((shape) => {
+              shapesMap.set(shape.id, shape);
+            });
+          });
+        }
         setImportMsg("Board imported!");
         if (result.boardName && onRename) {
           onRename(result.boardName);
@@ -115,7 +127,7 @@ export function BoardHeader({
       }
       setTimeout(() => setImportMsg(null), 3000);
     });
-  }, [editor, onRename]);
+  }, [shapesMap, onRename]);
 
   const handleNameDoubleClick = () => {
     if (!canRename) return;
@@ -211,7 +223,7 @@ export function BoardHeader({
         )}
 
         {/* Guest: Import + Export */}
-        {isGuest && editor && (
+        {isGuest && shapesMap && (
           <>
             <button
               onClick={handleImport}

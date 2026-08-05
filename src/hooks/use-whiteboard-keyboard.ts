@@ -60,6 +60,30 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         setSelectedShapeIds(Object.keys(shapes));
       }
 
+      // 5. Tool Selection Shortcuts (V, R, O, D, T, S)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const key = e.key.toLowerCase();
+        if (key === "v") {
+          e.preventDefault();
+          setActiveTool("select");
+        } else if (key === "r") {
+          e.preventDefault();
+          setActiveTool("rectangle");
+        } else if (key === "o") {
+          e.preventDefault();
+          setActiveTool("ellipse");
+        } else if (key === "d") {
+          e.preventDefault();
+          setActiveTool("draw");
+        } else if (key === "t") {
+          e.preventDefault();
+          setActiveTool("text");
+        } else if (key === "s") {
+          e.preventDefault();
+          setActiveTool("sticky");
+        }
+      }
+
       // 4. Arrow keys (Nudge selected shapes)
       if (
         ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) &&

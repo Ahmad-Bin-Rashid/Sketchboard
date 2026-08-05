@@ -16,9 +16,10 @@ interface CanvasProps {
   shapesMap: Y.Map<CustomShape> | null;
   undoManager: Y.UndoManager | null;
   viewportRef: React.RefObject<HTMLDivElement | null>;
+  uploadMedia: (file: File) => Promise<string>;
 }
 
-export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
+export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: CanvasProps) {
   const {
     pan,
     zoom,
@@ -460,6 +461,115 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
     [shapesMap, pan, zoom, shapes, setActiveTool, setSelectedShapeIds, viewportRef]
   );
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!shapesMap || !viewportRef.current) return;
+
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+      if (imageFiles.length === 0) return;
+
+      const rect = viewportRef.current.getBoundingClientRect();
+      const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        try {
+          const url = await uploadMedia(file);
+          
+          const id = nanoid();
+          const index = generateNewTopIndex(Object.values(shapes));
+          const offset = i * 20;
+
+          const newShape: CustomShape = {
+            id,
+            type: "image",
+            x: canvasPos.x - 100 + offset,
+            y: canvasPos.y - 100 + offset,
+            width: 200,
+            height: 200,
+            fill: "transparent",
+            stroke: "transparent",
+            strokeWidth: 0,
+            opacity: 1.0,
+            index,
+            src: url,
+          };
+
+          const doc = shapesMap.doc;
+          if (doc) {
+            doc.transact(() => {
+              shapesMap.set(id, newShape);
+            });
+          }
+          setSelectedShapeIds([id]);
+        } catch (err) {
+          console.error("Failed to upload dropped image:", err);
+        }
+      }
+    },
+    [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef]
+  );
+
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent) => {
+      if (!shapesMap || !viewportRef.current) return;
+
+      const files = Array.from(e.clipboardData.files);
+      const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+      if (imageFiles.length === 0) return;
+
+      e.preventDefault();
+
+      const rect = viewportRef.current.getBoundingClientRect();
+      const clientX = rect.left + rect.width / 2;
+      const clientY = rect.top + rect.height / 2;
+      const canvasPos = screenToCanvas(clientX, clientY, pan, zoom, rect);
+
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        try {
+          const url = await uploadMedia(file);
+          
+          const id = nanoid();
+          const index = generateNewTopIndex(Object.values(shapes));
+          const offset = i * 20;
+
+          const newShape: CustomShape = {
+            id,
+            type: "image",
+            x: canvasPos.x - 100 + offset,
+            y: canvasPos.y - 100 + offset,
+            width: 200,
+            height: 200,
+            fill: "transparent",
+            stroke: "transparent",
+            strokeWidth: 0,
+            opacity: 1.0,
+            index,
+            src: url,
+          };
+
+          const doc = shapesMap.doc;
+          if (doc) {
+            doc.transact(() => {
+              shapesMap.set(id, newShape);
+            });
+          }
+          setSelectedShapeIds([id]);
+        } catch (err) {
+          console.error("Failed to upload pasted image:", err);
+        }
+      }
+    },
+    [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef]
+  );
+
   return (
     <div
       ref={viewportRef}
@@ -477,6 +587,9 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onPaste={handlePaste}
     >
       {/* Decorative Canvas Background Grid Pattern */}
       <div

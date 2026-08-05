@@ -7,55 +7,110 @@
  *
  * File format:
  * {
- *   version: 1,
+ *   version: 2,
  *   appName: "SketchBoard",
  *   boardId: string,
  *   boardName: string,
- *   snapshot: TLStoreSnapshot,
+ *   shapes: CustomShape[],
  *   exportedAt: ISO string,
  * }
  */
 
-import type { Editor, TLEditorSnapshot } from "tldraw";
+import type { CustomShape, ShapeType } from "@/types/whiteboard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface WhiteboardFile {
-  version: 1;
+  version: 2;
   appName: "SketchBoard";
   boardId: string;
   boardName: string;
-  snapshot: TLEditorSnapshot;
+  shapes: CustomShape[];
   exportedAt: string;
 }
 
 export interface ImportResult {
   ok: boolean;
+  shapes?: CustomShape[];
   boardName?: string;
   error?: string;
+}
+
+const VALID_TYPES: ShapeType[] = ["rectangle", "ellipse", "draw", "text", "sticky", "image"];
+
+// ─── Type Guard ──────────────────────────────────────────────────────────────
+
+function isValidShape(s: unknown): s is CustomShape {
+  if (typeof s !== "object" || !s) return false;
+  const shape = s as Record<string, unknown>;
+
+  // Enforce base structural constraints
+  const hasBaseFields =
+    typeof shape.id === "string" &&
+    VALID_TYPES.includes(shape.type as ShapeType) &&
+    typeof shape.x === "number" &&
+    typeof shape.y === "number" &&
+    typeof shape.width === "number" &&
+    typeof shape.height === "number" &&
+    typeof shape.fill === "string" &&
+    typeof shape.stroke === "string" &&
+    typeof shape.strokeWidth === "number" &&
+    typeof shape.opacity === "number" &&
+    typeof shape.index === "string";
+
+  if (!hasBaseFields) return false;
+
+  // Enforce type-specific constraints
+  if (shape.type === "draw") {
+    if (!Array.isArray(shape.points)) return false;
+    return shape.points.every(
+      (p) =>
+        Array.isArray(p) &&
+        p.length === 3 &&
+        typeof p[0] === "number" &&
+        typeof p[1] === "number" &&
+        typeof p[2] === "number"
+    );
+  }
+
+  if (shape.type === "text") {
+    return (
+      typeof shape.text === "string" &&
+      typeof shape.fontSize === "number" &&
+      typeof shape.fontFamily === "string"
+    );
+  }
+
+  if (shape.type === "sticky") {
+    return (
+      typeof shape.text === "string" &&
+      typeof shape.fontSize === "number"
+    );
+  }
+
+  if (shape.type === "image") {
+    return typeof shape.src === "string";
+  }
+
+  return true;
 }
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
 /**
- * Export the current board to a `.whiteboard` file and trigger download.
- *
- * Uses `editor.store.getSnapshot()` which captures all shapes, assets,
- * and page state in a portable JSON format.
+ * Export the current shapes to a `.whiteboard` file and trigger download.
  */
 export function exportBoardAsFile(
-  editor: Editor,
+  shapes: CustomShape[],
   boardId: string,
   boardName: string
 ): void {
-  const snapshot = editor.getSnapshot();
-
   const file: WhiteboardFile = {
-    version: 1,
+    version: 2,
     appName: "SketchBoard",
     boardId,
     boardName,
-    snapshot,
+    shapes,
     exportedAt: new Date().toISOString(),
   };
 
@@ -78,15 +133,10 @@ export function exportBoardAsFile(
 // ─── Import ──────────────────────────────────────────────────────────────────
 
 /**
- * Import a `.whiteboard` file into the current editor.
- *
- * Reads the file, validates the format, and loads the snapshot.
- * Returns the board name from the file so the caller can update UI state.
+ * Import a `.whiteboard` file.
+ * Reads the file, validates the format, and extracts shapes.
  */
-export async function importBoardFromFile(
-  editor: Editor,
-  file: File
-): Promise<ImportResult> {
+export async function importBoardFromFile(file: File): Promise<ImportResult> {
   return new Promise((resolve) => {
     if (!file.name.endsWith(".whiteboard") && file.type !== "application/json") {
       resolve({ ok: false, error: "Invalid file type. Please select a .whiteboard file." });
@@ -98,18 +148,29 @@ export async function importBoardFromFile(
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
-        const parsed = JSON.parse(text) as WhiteboardFile;
+        const parsed = JSON.parse(text) as Record<string, any>;
 
         // Validate structure
-        if (parsed.version !== 1 || !parsed.snapshot) {
-          resolve({ ok: false, error: "Invalid .whiteboard file format." });
+        if (parsed.version !== 2 || !Array.isArray(parsed.shapes)) {
+          resolve({ ok: false, error: "Invalid .whiteboard file format. Only version 2 is supported." });
           return;
         }
 
-        // Load snapshot into the editor — replaces all current content
-        editor.loadSnapshot(parsed.snapshot);
+        const validShapes: CustomShape[] = [];
+        for (const s of parsed.shapes) {
+          if (isValidShape(s)) {
+            validShapes.push(s);
+          } else {
+            resolve({ ok: false, error: "Malformed shapes detected in file." });
+            return;
+          }
+        }
 
-        resolve({ ok: true, boardName: parsed.boardName });
+        resolve({
+          ok: true,
+          shapes: validShapes,
+          boardName: typeof parsed.boardName === "string" ? parsed.boardName : undefined,
+        });
       } catch {
         resolve({ ok: false, error: "Failed to parse file. The file may be corrupted." });
       }
@@ -125,10 +186,8 @@ export async function importBoardFromFile(
 
 /**
  * Open a native file picker and import the selected file.
- * Convenience wrapper around importBoardFromFile.
  */
 export function openImportFilePicker(
-  editor: Editor,
   onResult: (result: ImportResult) => void
 ): void {
   const input = document.createElement("input");
@@ -138,7 +197,7 @@ export function openImportFilePicker(
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
-    const result = await importBoardFromFile(editor, file);
+    const result = await importBoardFromFile(file);
     onResult(result);
   };
 

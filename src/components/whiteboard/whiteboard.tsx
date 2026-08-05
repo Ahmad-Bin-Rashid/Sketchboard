@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Main Whiteboard component — wraps tldraw with real-time collaboration.
+ * Main Whiteboard component — wraps custom canvas with real-time collaboration.
  *
  * Supports two modes:
  *
@@ -17,41 +17,24 @@
  * - Board state persisted to DB via PartyKit (Phase 8)
  * - Full dashboard access
  * - Images: uploaded to Uploadthing CDN, recorded in DB
- *
- * Architecture:
- * ┌───────────────────────────────────────────────────────┐
- * │  Whiteboard (this component)                          │
- * │  ├── GuestNameModal (guest, first visit only)         │
- * │  ├── Tldraw (full screen canvas, z-0)                 │
- * │  │    └── assetStore (guest=base64 / auth=CDN)        │
- * │  ├── RemoteCursors (overlay, z-250)                   │
- * │  │    └── CursorAvatar × N (per remote user)          │
- * │  ├── BoardHeader (floating, z-200)                    │
- * │  │    └── ActiveUsersPanel (stacked avatars)          │
- * │  ├── UploadToastManager (bottom-right, z-300)         │
- * │  └── ConnectionIndicator (floating, z-200)            │
- * └───────────────────────────────────────────────────────┘
  */
 
 import { useCallback, useEffect, useState, useRef } from "react";
-import { Tldraw, type Editor } from "tldraw";
-import "tldraw/tldraw.css";
-import { nanoid } from "nanoid";
 
-import { useYjsSync, type WhiteboardMode } from "@/hooks/use-yjs-sync";
-import { useCursorBroadcast } from "@/hooks/use-cursor-broadcast";
-import { useActiveUsers } from "@/hooks/use-active-users";
+import { useYjsSync, useUndoRedo, useCursorBroadcast, useActiveUsers, type WhiteboardMode } from "@/hooks";
 import { getGuestIdentity, hasSetGuestName } from "@/lib/guest";
 import { renameGuestBoard, getGuestBoardMeta } from "@/lib/local-board-store";
 import { renameBoard } from "@/actions/board";
 import type { UserRole } from "@/types";
 import { useAssetStore } from "@/lib/assets";
-import { useTheme } from "@/components/theme-provider";
+import { useWhiteboardKeyboard } from "@/hooks/use-whiteboard-keyboard";
 import { BoardHeader } from "./board-header";
 import { ConnectionIndicator } from "./connection-indicator";
 import { RemoteCursors } from "./remote-cursors";
 import { GuestNameModal } from "./guest-name-modal";
 import { UploadToastManager, type ToastEntry } from "./upload-toast";
+import { Canvas } from "./canvas";
+import { Toolbar } from "./toolbar";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,11 +64,6 @@ export function Whiteboard({
   avatarUrl,
   role,
 }: WhiteboardProps) {
-  const { theme } = useTheme();
-  const [editor, setEditor] = useState<Editor | null>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-
-  // Board name can be changed inline by guests
   const [boardName, setBoardName] = useState(initialBoardName);
 
   // Guest identity — loaded from localStorage (client-side only)
@@ -99,13 +77,7 @@ export function Whiteboard({
   // Upload toasts — shown in auth mode when images are uploaded
   const [uploadToasts, setUploadToasts] = useState<ToastEntry[]>([]);
 
-  // Load guest identity on client mount
-  useEffect(() => {
-    console.log("[Whiteboard] Component MOUNTED. boardId:", boardId, "mode:", mode);
-    return () => {
-      console.log("[Whiteboard] Component UNMOUNTED. boardId:", boardId, "mode:", mode);
-    };
-  }, [boardId, mode]);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (mode !== "guest") return;
@@ -157,14 +129,12 @@ export function Whiteboard({
     setUploadToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // ─── Asset store — tldraw image upload backend ────────────────────────
+  // ─── Asset store — image upload backend ────────────────────────
 
-  const assetStore = useAssetStore({
+  const { uploadMedia } = useAssetStore({
     mode,
     boardId,
-    editor,
     onUploadStart: (id, fileName) => {
-      // Only show toasts in auth mode (guest mode is instant base64)
       if (mode === "auth") addToast(id, fileName);
     },
     onUploadProgress: (id, progress) => {
@@ -174,13 +144,11 @@ export function Whiteboard({
       if (mode === "auth") updateToastSuccess(id);
     },
     onUploadError: (id, error) => {
-      // Show error toast in both modes
       setUploadToasts((prev) => {
         const exists = prev.find((t) => t.id === id);
         if (exists) {
           return prev.map((t) => (t.id === id ? { ...t, status: "error" as const, error } : t));
         }
-        // Guest mode: add a new error toast
         return [...prev, { id, fileName: "Image", status: "error" as const, error }];
       });
     },
@@ -195,9 +163,8 @@ export function Whiteboard({
 
   // ─── Real-time collaboration sync ────────────────────────────────────
 
-  const { awarenessManager, connectionStatus, peerCount } = useYjsSync({
+  const { shapesMap, undoManager, awarenessManager, connectionStatus, peerCount } = useYjsSync({
     boardId,
-    editor,
     userId: effectiveUserId,
     userName: effectiveUserName,
     avatarUrl: effectiveAvatarUrl,
@@ -207,76 +174,14 @@ export function Whiteboard({
     boardName,
   });
 
+  // Keyboard Shortcuts Hook
+  useWhiteboardKeyboard(shapesMap);
+  useUndoRedo(undoManager);
+
+  // Cursor Broadcast Hook
   useCursorBroadcast({ viewportRef, awarenessManager });
 
   const { collaborators } = useActiveUsers(awarenessManager);
-
-  // ─── Editor mount ────────────────────────────────────────────────────
-
-  const handleMount = useCallback(
-    (mountedEditor: Editor) => {
-      setEditor(mountedEditor);
-      mountedEditor.updateInstanceState({ isFocused: true });
-
-      if (process.env.NODE_ENV === "development") {
-        (window as unknown as Record<string, unknown>).__tldraw_editor = mountedEditor;
-        console.log(`[Whiteboard] Mounted — board: ${boardId}, mode: ${mode}`);
-      }
-    },
-    [boardId, mode]
-  );
-
-  // Migrate any local storage assets that have been uploaded to Uploadthing
-  useEffect(() => {
-    if (!editor || mode !== "auth") return;
-
-    const migrateAssets = () => {
-      try {
-        const mappingsStr = localStorage.getItem("sketchboard-media-mappings");
-        if (!mappingsStr) return;
-        const mappings = JSON.parse(mappingsStr) as Record<string, string>;
-
-        const assets = editor.getAssets();
-        const assetsToUpdate: any[] = [];
-
-        for (const asset of assets) {
-          const cloudUrl = mappings[asset.id];
-          if (cloudUrl && asset.props && "src" in asset.props && typeof asset.props.src === "string" && asset.props.src.startsWith("data:")) {
-            assetsToUpdate.push({
-              id: asset.id,
-              type: asset.type,
-              props: {
-                ...asset.props,
-                src: cloudUrl,
-              },
-            });
-          }
-        }
-
-        if (assetsToUpdate.length > 0) {
-          console.log("[Whiteboard] Migrating local assets to cloud URLs:", assetsToUpdate);
-          editor.updateAssets(assetsToUpdate);
-        }
-      } catch (err) {
-        console.warn("[Whiteboard] Failed to migrate local assets:", err);
-      }
-    };
-
-    // Run after a short delay to allow collaborative synchronization to load
-    const timeoutId = setTimeout(migrateAssets, 2000);
-    return () => clearTimeout(timeoutId);
-  }, [editor, mode]);
-
-  // Sync theme changes to the tldraw editor preferences
-  useEffect(() => {
-    if (editor) {
-      editor.user.updateUserPreferences({
-        colorScheme: theme,
-      });
-    }
-  }, [editor, theme]);
-
-  // ─── Event handlers ──────────────────────────────────────────────────
 
   const handleNameConfirmed = useCallback((name: string, color: string) => {
     setGuestName(name);
@@ -306,8 +211,6 @@ export function Whiteboard({
     [boardId, mode, boardName]
   );
 
-  // ─── Render ──────────────────────────────────────────────────────────
-
   return (
     <div className="relative h-screen w-screen">
       {/* Screen rotation prompt overlay for mobile portrait */}
@@ -329,17 +232,18 @@ export function Whiteboard({
         <GuestNameModal onConfirm={handleNameConfirmed} />
       )}
 
-      {/* tldraw canvas — full screen */}
-      <div ref={viewportRef} className="absolute inset-0 z-0">
-        <Tldraw
-          onMount={handleMount}
-          autoFocus
-          assets={assetStore}
+      {/* Custom DOM canvas */}
+      <div className="absolute inset-0 z-0">
+        <Canvas
+          shapesMap={shapesMap}
+          undoManager={undoManager}
+          viewportRef={viewportRef}
+          uploadMedia={uploadMedia}
         />
       </div>
 
       {/* Remote cursors overlay */}
-      {editor && awarenessManager && (
+      {awarenessManager && (
         <RemoteCursors awarenessManager={awarenessManager} />
       )}
 
@@ -352,11 +256,14 @@ export function Whiteboard({
         collaborators={collaborators}
         mode={mode}
         role={role}
-        editor={editor}
+        shapesMap={shapesMap}
         guestName={mode === "guest" ? guestName : undefined}
         onRename={handleBoardRename}
         onChangeName={mode === "guest" ? () => setShowNameModal(true) : undefined}
       />
+
+      {/* Main floating pill toolbar */}
+      <Toolbar shapesMap={shapesMap} />
 
       {/* Upload progress toasts — bottom-right, above toolbar */}
       <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />

@@ -36,9 +36,9 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
     setActiveTool(tool);
   };
 
-  // Find the currently selected shape (if only one is selected) to show its styles
+  // Find the baseline selected shape to show styles (if at least one is selected)
   const selectedShape =
-    selectedShapeIds.length === 1 ? shapes[selectedShapeIds[0]] : null;
+    selectedShapeIds.length > 0 ? shapes[selectedShapeIds[0]] : null;
 
   const updateSelectedShapeStyle = (
     updater: (shape: CustomShape) => Partial<CustomShape>
