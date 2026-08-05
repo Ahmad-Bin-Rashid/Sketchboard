@@ -6,6 +6,7 @@ import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { screenToCanvas, pointsToBoundingBox, simplifyPath } from "@/lib/coordinate-helpers";
 import type { CustomShape } from "@/types/whiteboard";
 import { ShapeRenderer } from "./shapes/shape-renderer";
+import { SelectionBox } from "./selection-box";
 import { nanoid } from "nanoid";
 import { generateNewTopIndex } from "@/lib/fractional-index";
 
@@ -30,6 +31,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
     setDraftShape,
     setSelectedShapeIds,
     rubberBandRect,
+    setRubberBandRect,
   } = useWhiteboardStore();
 
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -92,13 +94,15 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
         target.classList.contains("canvas-viewport") ||
         target.classList.contains("board-container");
 
-      // 2. Select tool click panning on empty background
+      // 2. Select tool rubber-band selection on empty background
       if (activeTool === "select" && isCanvasBackground) {
-        // Deselect when clicking empty background
         setSelectedShapeIds([]);
         
-        setIsPanning(true);
-        panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+        const rect = viewportRef.current.getBoundingClientRect();
+        const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+        dragStartRef.current = canvasPos;
+        setRubberBandRect({ x: canvasPos.x, y: canvasPos.y, width: 0, height: 0 });
+        
         e.currentTarget.setPointerCapture(e.pointerId);
         e.stopPropagation();
         return;
@@ -170,44 +174,58 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
         return;
       }
 
-      if (draftShape && viewportRef.current) {
+      if (viewportRef.current) {
         const rect = viewportRef.current.getBoundingClientRect();
         const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
 
-        if (draftShape.type === "draw") {
-          const nextPoints = [
-            ...draftShape.points,
-            [canvasPos.x, canvasPos.y, e.pressure || 0.5] as [number, number, number],
-          ];
-          const bounds = pointsToBoundingBox(nextPoints);
-
-          setDraftShape({
-            ...draftShape,
-            points: nextPoints,
-            x: bounds.x,
-            y: bounds.y,
-            width: bounds.width,
-            height: bounds.height,
-          });
-        } else {
+        if (rubberBandRect) {
           const start = dragStartRef.current;
           const x = Math.min(start.x, canvasPos.x);
           const y = Math.min(start.y, canvasPos.y);
           const width = Math.abs(canvasPos.x - start.x);
           const height = Math.abs(canvasPos.y - start.y);
 
-          setDraftShape({
-            ...draftShape,
-            x,
-            y,
-            width,
-            height,
-          });
+          setRubberBandRect({ x, y, width, height });
+          e.stopPropagation();
+          return;
         }
-        e.stopPropagation();
+
+        if (draftShape) {
+          if (draftShape.type === "draw") {
+            const nextPoints = [
+              ...draftShape.points,
+              [canvasPos.x, canvasPos.y, e.pressure || 0.5] as [number, number, number],
+            ];
+            const bounds = pointsToBoundingBox(nextPoints);
+
+            setDraftShape({
+              ...draftShape,
+              points: nextPoints,
+              x: bounds.x,
+              y: bounds.y,
+              width: bounds.width,
+              height: bounds.height,
+            });
+          } else {
+            const start = dragStartRef.current;
+            const x = Math.min(start.x, canvasPos.x);
+            const y = Math.min(start.y, canvasPos.y);
+            const width = Math.abs(canvasPos.x - start.x);
+            const height = Math.abs(canvasPos.y - start.y);
+
+            setDraftShape({
+              ...draftShape,
+              x,
+              y,
+              width,
+              height,
+            });
+          }
+          e.stopPropagation();
+        }
       }
     },
-    [isPanning, draftShape, pan, zoom, setPan, setDraftShape, viewportRef]
+    [isPanning, draftShape, rubberBandRect, pan, zoom, setPan, setDraftShape, setRubberBandRect, viewportRef]
   );
 
   // Pointer Up handler
@@ -217,6 +235,30 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
         setIsPanning(false);
         e.currentTarget.releasePointerCapture(e.pointerId);
         e.stopPropagation();
+        return;
+      }
+
+      if (rubberBandRect) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        e.stopPropagation();
+
+        const intersectingIds: string[] = [];
+        const r = rubberBandRect;
+
+        Object.values(shapes).forEach((shape) => {
+          // Check AABB intersection between shape bounding box and rubber-band drag box
+          if (
+            shape.x < r.x + r.width &&
+            shape.x + shape.width > r.x &&
+            shape.y < r.y + r.height &&
+            shape.y + shape.height > r.y
+          ) {
+            intersectingIds.push(shape.id);
+          }
+        });
+
+        setSelectedShapeIds(intersectingIds);
+        setRubberBandRect(null);
         return;
       }
 
@@ -271,7 +313,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
         setActiveTool("select");
       }
     },
-    [isPanning, draftShape, shapesMap, setDraftShape, setActiveTool, setSelectedShapeIds]
+    [isPanning, rubberBandRect, shapes, setSelectedShapeIds, setRubberBandRect, draftShape, shapesMap, setDraftShape, setActiveTool]
   );
 
 
@@ -474,6 +516,19 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
             isDraft
           />
         )}
+        {rubberBandRect && (
+          <div
+            className="absolute border border-dashed border-primary pointer-events-none"
+            style={{
+              left: rubberBandRect.x,
+              top: rubberBandRect.y,
+              width: rubberBandRect.width,
+              height: rubberBandRect.height,
+              backgroundColor: "rgba(96, 103, 86, 0.08)",
+            }}
+          />
+        )}
+        <SelectionBox shapesMap={shapesMap} />
       </div>
     </div>
   );
