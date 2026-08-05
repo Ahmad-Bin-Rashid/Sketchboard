@@ -33,7 +33,7 @@
  * └───────────────────────────────────────────────────────┘
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import { nanoid } from "nanoid";
@@ -83,6 +83,7 @@ export function Whiteboard({
 }: WhiteboardProps) {
   const { theme } = useTheme();
   const [editor, setEditor] = useState<Editor | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   // Board name can be changed inline by guests
   const [boardName, setBoardName] = useState(initialBoardName);
@@ -206,7 +207,7 @@ export function Whiteboard({
     boardName,
   });
 
-  useCursorBroadcast({ editor, awarenessManager });
+  useCursorBroadcast({ viewportRef, awarenessManager });
 
   const { collaborators } = useActiveUsers(awarenessManager);
 
@@ -329,7 +330,7 @@ export function Whiteboard({
       )}
 
       {/* tldraw canvas — full screen */}
-      <div className="absolute inset-0 z-0">
+      <div ref={viewportRef} className="absolute inset-0 z-0">
         <Tldraw
           onMount={handleMount}
           autoFocus
@@ -339,7 +340,7 @@ export function Whiteboard({
 
       {/* Remote cursors overlay */}
       {editor && awarenessManager && (
-        <RemoteCursors editor={editor} awarenessManager={awarenessManager} />
+        <RemoteCursors awarenessManager={awarenessManager} />
       )}
 
       {/* Board header */}

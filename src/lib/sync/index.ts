@@ -29,10 +29,7 @@ export {
 
 export {
   throttle,
-  screenToPage,
-  pageToScreen,
   lerp,
   updateSmoothedCursor,
-  createCursorBroadcast,
   type SmoothedCursor,
 } from "./cursor-manager";

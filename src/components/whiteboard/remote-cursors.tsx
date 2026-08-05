@@ -1,37 +1,19 @@
 "use client";
 
-/**
- * RemoteCursors — overlay layer that renders all connected users' cursors.
- *
- * Architecture:
- * - Sits as a full-screen overlay above the tldraw canvas
- * - pointer-events: none so it doesn't block canvas interaction
- * - Subscribes to the awareness manager for remote cursor positions
- * - Uses requestAnimationFrame for smooth cursor interpolation
- * - Converts page coordinates → viewport coordinates each frame
- *
- * Performance:
- * - Memoized CursorAvatar components prevent unnecessary child re-renders
- * - SmoothedCursor interpolation runs at display refresh rate
- * - Stale cursors (user left) are cleaned up immediately by awareness protocol
- */
-
 import { useEffect, useRef, useCallback, useState } from "react";
-import type { Editor } from "tldraw";
 import type { AwarenessManager } from "@/lib/sync/awareness";
 import type { CursorPresence } from "@/types";
 import {
-  pageToScreen,
   updateSmoothedCursor,
   type SmoothedCursor,
 } from "@/lib/sync/cursor-manager";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { canvasToScreen } from "@/lib/coordinate-helpers";
 import { CursorAvatar } from "./cursor-avatar";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface RemoteCursorsProps {
-  /** tldraw editor instance for coordinate transforms */
-  editor: Editor;
   /** Awareness manager providing remote user data */
   awarenessManager: AwarenessManager;
 }
@@ -44,7 +26,7 @@ interface CursorState {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) {
+export function RemoteCursors({ awarenessManager }: RemoteCursorsProps) {
   const [cursors, setCursors] = useState<Map<number, CursorState>>(new Map());
   const cursorsRef = useRef<Map<number, CursorState>>(new Map());
   const rafRef = useRef<number | null>(null);
@@ -58,20 +40,21 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
     const { cursors: remoteCursors } = awarenessManager.getRemoteUsers();
     const currentMap = cursorsRef.current;
     const newMap = new Map<number, CursorState>();
+    const { pan, zoom } = useWhiteboardStore.getState();
 
     for (const presence of remoteCursors) {
       const existing = currentMap.get(presence.clientId);
 
       if (existing) {
         // Update target position and presence info
-        const screenPos = pageToScreen(editor, presence.x, presence.y);
+        const screenPos = canvasToScreen(presence.x, presence.y, pan, zoom);
         existing.presence = presence;
         existing.smoothed.targetX = screenPos.x;
         existing.smoothed.targetY = screenPos.y;
         newMap.set(presence.clientId, existing);
       } else {
         // New cursor — start at target position (no initial lerp)
-        const screenPos = pageToScreen(editor, presence.x, presence.y);
+        const screenPos = canvasToScreen(presence.x, presence.y, pan, zoom);
         newMap.set(presence.clientId, {
           presence,
           smoothed: {
@@ -96,8 +79,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
       stopAnimationLoop();
       setCursors(new Map());
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, awarenessManager]);
+  }, [awarenessManager]);
 
   /**
    * Animation loop — interpolates all cursors toward their targets
@@ -113,7 +95,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
     // Update React state for re-render
     setCursors(new Map(map));
 
-    // Keep looping while there are any cursors (drawing = constant updates)
+    // Keep looping while there are any cursors
     if (map.size > 0) {
       rafRef.current = requestAnimationFrame(animate);
     } else {
@@ -137,17 +119,19 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
 
   /**
    * Also update screen positions when the camera changes (zoom/pan).
-   * tldraw's camera transform affects pageToScreen conversion.
    */
   const updateScreenPositions = useCallback(() => {
     const map = cursorsRef.current;
     if (map.size === 0) return;
 
+    const { pan, zoom } = useWhiteboardStore.getState();
+
     map.forEach((state) => {
-      const screenPos = pageToScreen(
-        editor,
+      const screenPos = canvasToScreen(
         state.presence.x,
-        state.presence.y
+        state.presence.y,
+        pan,
+        zoom
       );
       state.smoothed.targetX = screenPos.x;
       state.smoothed.targetY = screenPos.y;
@@ -157,7 +141,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
     });
 
     setCursors(new Map(map));
-  }, [editor]);
+  }, []);
 
   // Subscribe to awareness changes
   useEffect(() => {
@@ -169,17 +153,18 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
 
   // Subscribe to camera changes for coordinate re-projection
   useEffect(() => {
-    const unsubscribe = editor.store.listen(
-      () => {
+    let lastPan = useWhiteboardStore.getState().pan;
+    let lastZoom = useWhiteboardStore.getState().zoom;
+
+    const unsubscribe = useWhiteboardStore.subscribe((state) => {
+      if (state.pan !== lastPan || state.zoom !== lastZoom) {
+        lastPan = state.pan;
+        lastZoom = state.zoom;
         updateScreenPositions();
-      },
-      {
-        source: "all",
-        scope: "session",
       }
-    );
+    });
     return unsubscribe;
-  }, [editor, updateScreenPositions]);
+  }, [updateScreenPositions]);
 
   // Cleanup animation loop on unmount
   useEffect(() => {
