@@ -10,7 +10,6 @@
  * - cursor-manager:  Coordinate transforms, throttling, smooth interpolation
  */
 
-export { TldrawYjsSync, type TldrawYjsSyncOptions } from "./tldraw-yjs-sync";
 
 export {
   useConnectionStore,

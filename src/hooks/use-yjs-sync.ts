@@ -1,85 +1,41 @@
-/**
- * useYjsSync — real-time collaboration hook using Liveblocks + Yjs.
- *
- * Replaces the previous PartyKit (y-partykit) transport with Liveblocks.
- * The CRDT layer (TldrawYjsSync) and awareness layer (AwarenessManager)
- * are completely unchanged — only the WebSocket provider changes.
- *
- * Architecture:
- * - Liveblocks Room → getYjsProviderForRoom → Y.Doc → TldrawYjsSync → tldraw
- * - Liveblocks Room → getYjsProviderForRoom → awareness → AwarenessManager
- *
- * Liveblocks v3 API (recommended pattern):
- * - `client.enterRoom(roomId, opts)` → `{ room, leave }`
- * - `getYjsProviderForRoom(room)` — the recommended way to get the Yjs provider.
- *   It manages the provider lifecycle automatically and avoids issues with
- *   dynamically switching between rooms (unlike `new LiveblocksYjsProvider()`).
- * - `yProvider.getYDoc()` — get the internally managed Y.Doc
- * - `yProvider.awareness` — the awareness instance
- *
- * Lifecycle:
- * - On mount: enter Liveblocks room, get Yjs provider via getYjsProviderForRoom
- * - Guest mode: restore saved snapshot into tldraw on first sync
- * - Guest mode: auto-save to localStorage on store changes (debounced 2s)
- * - On unmount: call leave(), clean up
- */
-
 "use client";
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
+import * as Y from "yjs";
 import { getYjsProviderForRoom } from "@liveblocks/yjs";
-import type { Editor } from "tldraw";
 
 import { createLiveblocksClient } from "@/lib/liveblocks";
-import { TldrawYjsSync } from "@/lib/sync/tldraw-yjs-sync";
 import { AwarenessManager } from "@/lib/sync/awareness";
 import { useConnectionStore, type ConnectionStatus } from "@/lib/sync/connection";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { loadGuestBoard, saveGuestBoard, deleteGuestBoard } from "@/lib/local-board-store";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import type { CustomShape } from "@/types/whiteboard";
 
 export type WhiteboardMode = "guest" | "auth";
 
 export interface UseYjsSyncOptions {
-  /** Board ID — used as the Liveblocks room name */
   boardId: string;
-  /** tldraw Editor instance (available after onMount) */
-  editor: Editor | null;
-  /** Current user's ID */
   userId: string;
-  /** Current user's display name */
   userName: string;
-  /** Current user's avatar URL */
   avatarUrl?: string | null;
-  /** Current user's cursor color */
   userColor?: string;
-  /** Whether to enable collaboration (false = local-only mode) */
   enabled?: boolean;
-  /**
-   * "guest": localStorage persistence, no DB
-   * "auth":  DB persistence (handled separately)
-   */
   mode?: WhiteboardMode;
-  /** Current board name (used for localStorage save label in guest mode) */
   boardName?: string;
+  editor?: any; // Temporary field for phase transition compilation
 }
 
 export interface UseYjsSyncReturn {
-  /** Awareness manager for cursor/presence APIs */
+  shapesMap: Y.Map<CustomShape> | null;
+  undoManager: Y.UndoManager | null;
   awarenessManager: AwarenessManager | null;
-  /** Current connection status */
   connectionStatus: ConnectionStatus;
-  /** Number of connected peers (including self) */
   peerCount: number;
-  /** Whether initial sync is complete */
   isSynced: boolean;
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
-
 export function useYjsSync({
   boardId,
-  editor,
   userId,
   userName,
   avatarUrl,
@@ -88,82 +44,48 @@ export function useYjsSync({
   mode = "guest",
   boardName = "Untitled Board",
 }: UseYjsSyncOptions): UseYjsSyncReturn {
-  // Refs for cleanup-safe access to mutable objects
-  const syncRef = useRef<TldrawYjsSync | null>(null);
   const awarenessManagerRef = useRef<AwarenessManager | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // `leave` function returned by client.enterRoom — called on cleanup
   const leaveRoomRef = useRef<(() => void) | null>(null);
 
-  // Local state
-  const [awarenessManager, setAwarenessManager] =
-    useState<AwarenessManager | null>(null);
+  const [shapesMap, setShapesMap] = useState<Y.Map<CustomShape> | null>(null);
+  const [undoManager, setUndoManager] = useState<Y.UndoManager | null>(null);
+  const [awarenessManager, setAwarenessManager] = useState<AwarenessManager | null>(null);
   const [isSynced, setIsSynced] = useState(false);
 
-  // Connection store
   const connectionStatus = useConnectionStore((s) => s.status);
   const peerCount = useConnectionStore((s) => s.peerCount);
   const setStatus = useConnectionStore((s) => s.setStatus);
   const setPeerCount = useConnectionStore((s) => s.setPeerCount);
   const reset = useConnectionStore((s) => s.reset);
 
-  /**
-   * Liveblocks client — memoized so the same instance is reused across
-   * re-renders. Creating a new client on every render would open duplicate
-   * WebSocket connections.
-   */
   const liveblocksClient = useMemo(() => createLiveblocksClient(), []);
 
-  /**
-   * Clean up all collaboration resources.
-   * Called on unmount or when key deps change.
-   */
   const cleanup = useCallback(() => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-
-    syncRef.current?.dispose();
-    syncRef.current = null;
-
     awarenessManagerRef.current?.dispose();
     awarenessManagerRef.current = null;
     setAwarenessManager(null);
 
-    // Leave the Liveblocks room (frees WebSocket connection).
-    // getYjsProviderForRoom automatically cleans up the provider when the room
-    // is destroyed, so we only need to call leave() here.
     leaveRoomRef.current?.();
     leaveRoomRef.current = null;
 
+    setShapesMap(null);
+    setUndoManager(null);
     setIsSynced(false);
     reset();
   }, [reset]);
 
-  /**
-   * Main effect: set up the full collaboration stack.
-   *
-   * Dependencies: boardId, editor, enabled
-   * When any of these change, we tear down and rebuild.
-   */
   useEffect(() => {
-    if (!editor || !enabled) {
+    if (!enabled) {
       cleanup();
       return;
     }
 
-    // ── 1. Enter the Liveblocks room ──────────────────────────────────────
-    // One room per board ID. Uses the memoized client so we don't create
-    // duplicate connections on re-renders.
-    //
-    // Liveblocks v3 API: enterRoom returns { room, leave }
+    // 1. Enter the Liveblocks room
     const { room, leave } = liveblocksClient.enterRoom(boardId, {
       initialPresence: {},
     });
     leaveRoomRef.current = leave;
 
-    // Track connection status via room events
     setStatus("connecting");
 
     const unsubStatus = room.subscribe("status", (status) => {
@@ -180,71 +102,66 @@ export function useYjsSync({
       }
     });
 
-    // ── 2. Get the Yjs provider via getYjsProviderForRoom ─────────────────
-    // This is the recommended Liveblocks v3 approach. It:
-    // - Creates or returns an existing LiveblocksYjsProvider for this room
-    // - Internally manages the Y.Doc (setting clientID = room connectionId)
-    // - Automatically destroys the provider when the room is destroyed
-    //   (so we don't need to call provider.destroy() ourselves)
-    //
-    // NOTE: Do NOT pass an external Y.Doc — let the provider manage it via
-    // getYjsProviderForRoom, then retrieve the doc with yProvider.getYDoc().
+    // 2. Get Yjs provider and doc
     const yProvider = getYjsProviderForRoom(room);
-
-    // Get the internally-managed Y.Doc (clientID is already set correctly)
     const doc = yProvider.getYDoc();
+    const map = doc.getMap<CustomShape>("shapes");
+    setShapesMap(map);
 
-    // ── 3. Handle initial sync ────────────────────────────────────────────
+    // Create UndoManager scoped to the shapes map
+    const manager = new Y.UndoManager(map);
+    setUndoManager(manager);
+
+    // 3. Handle initial sync
     const handleSync = (synced: boolean) => {
       if (!synced) return;
-      console.log("[useYjsSync] Sync event fired. yProvider.awareness:", !!yProvider.awareness, "doc.clientID:", doc?.clientID);
       setIsSynced(true);
 
       try {
-        // 3a. Restore guest localStorage snapshot BEFORE wiring tldraw sync
+        // Hydrate Zustand with initial shapes
+        const initialShapes: Record<string, CustomShape> = {};
+        map.forEach((shape, id) => {
+          initialShapes[id] = shape;
+        });
+        useWhiteboardStore.getState().setShapes(initialShapes);
+
+        // Guest mode: restore local storage snapshot on initial connection if empty
         if (mode === "guest") {
           const saved = loadGuestBoard(boardId);
-          if (saved) {
-            try {
-              editor.loadSnapshot(saved);
-            } catch (err) {
-              console.error("[useYjsSync] Failed to load snapshot:", err);
-            }
+          if (saved && saved.length > 0 && map.size === 0) {
+            doc.transact(() => {
+              saved.forEach((shape) => {
+                map.set(shape.id, shape);
+              });
+            });
+            // Update Zustand immediately
+            const restoredShapes: Record<string, CustomShape> = {};
+            saved.forEach((shape) => {
+              restoredShapes[shape.id] = shape;
+            });
+            useWhiteboardStore.getState().setShapes(restoredShapes);
           }
         } else if (mode === "auth") {
-          // Check if we need to seed the board from a guest local storage board
           const params = new URLSearchParams(window.location.search);
           const importLocalId = params.get("importLocal");
-          if (importLocalId) {
+          if (importLocalId && map.size === 0) {
             const saved = loadGuestBoard(importLocalId);
-            if (saved) {
-              try {
-                editor.loadSnapshot(saved);
-                console.log("[useYjsSync] Imported local storage board:", importLocalId);
-                // Clean up the local storage board and clear query params
-                deleteGuestBoard(importLocalId);
-                const cleanUrl = window.location.pathname;
-                window.history.replaceState({}, document.title, cleanUrl);
-              } catch (err) {
-                console.error("[useYjsSync] Failed to import local board snapshot:", err);
-              }
+            if (saved && saved.length > 0) {
+              doc.transact(() => {
+                saved.forEach((shape) => {
+                  map.set(shape.id, shape);
+                });
+              });
+              deleteGuestBoard(importLocalId);
+              const cleanUrl = window.location.pathname;
+              window.history.replaceState({}, document.title, cleanUrl);
             }
           }
         }
 
-        // 3b. Wire tldraw ↔ Yjs sync bridge (unchanged from PartyKit version)
-        if (!syncRef.current) {
-          console.log("[useYjsSync] Instantiating TldrawYjsSync");
-          syncRef.current = new TldrawYjsSync({ doc, editor });
-        }
-
-        // 3c. Create awareness manager (unchanged — same awareness API)
+        // Create awareness manager
         if (!awarenessManagerRef.current) {
-          if (!yProvider.awareness) {
-            console.error("[useYjsSync] yProvider.awareness is missing!");
-          }
-          console.log("[useYjsSync] Instantiating AwarenessManager with clientID:", doc.clientID);
-          const manager = new AwarenessManager({
+          const am = new AwarenessManager({
             awareness: yProvider.awareness as unknown as import("@/lib/sync/awareness").AwarenessLike,
             clientID: doc.clientID,
             userId,
@@ -252,64 +169,76 @@ export function useYjsSync({
             avatarUrl,
             ...(userColor ? { color: userColor } : {}),
           });
-          awarenessManagerRef.current = manager;
-          setAwarenessManager(manager);
+          awarenessManagerRef.current = am;
+          setAwarenessManager(am);
 
-          // Track peer count changes
-          const unsubPeers = manager.onRemoteChange(() => {
-            setPeerCount(manager.getPeerCount());
+          const unsubPeers = am.onRemoteChange(() => {
+            setPeerCount(am.getPeerCount());
           });
-          setPeerCount(manager.getPeerCount());
-          (manager as unknown as Record<string, unknown>).__unsubPeers = unsubPeers;
+          setPeerCount(am.getPeerCount());
+          (am as any).__unsubPeers = unsubPeers;
         }
       } catch (err) {
-        console.error("[useYjsSync] Uncaught error inside handleSync:", err);
+        console.error("[useYjsSync] Error inside handleSync:", err);
       }
     };
 
-      // 3d. Guest mode: auto-save to localStorage on store changes (debounced 2s)
-      if (mode === "guest") {
-        const unsubStore = editor.store.listen(
-          () => {
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = setTimeout(() => {
-              const snapshot = editor.getSnapshot();
-              saveGuestBoard(boardId, snapshot, boardName);
-            }, 2000);
-          },
-          { source: "all", scope: "document" }
-        );
-        (yProvider as unknown as Record<string, unknown>).__unsubStore = unsubStore;
-      }
-
-    // LiveblocksYjsProvider fires "sync" just like y-partykit
     yProvider.on("sync", handleSync);
 
-    // If already synced (e.g., reconnection), trigger immediately
+    // Observe changes on the shared Yjs Map to sync updates into Zustand
+    const handleMapObserve = () => {
+      const updatedShapes: Record<string, CustomShape> = {};
+      map.forEach((shape, id) => {
+        updatedShapes[id] = shape;
+      });
+      useWhiteboardStore.getState().setShapes(updatedShapes);
+    };
+    map.observe(handleMapObserve);
+
     if (yProvider.synced) {
       handleSync(true);
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────────────
     return () => {
       unsubStatus();
       yProvider.off("sync", handleSync);
+      map.unobserve(handleMapObserve);
 
-      const unsubStore = (yProvider as unknown as Record<string, unknown>)
-        .__unsubStore as (() => void) | undefined;
-      unsubStore?.();
-
-      const unsubPeers = (
-        awarenessManagerRef.current as unknown as Record<string, unknown>
-      )?.__unsubPeers as (() => void) | undefined;
-      unsubPeers?.();
+      const unsubPeers = (awarenessManagerRef.current as any)?.__unsubPeers;
+      if (unsubPeers) unsubPeers();
 
       cleanup();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, editor, enabled]);
+  }, [boardId, enabled, userId, userName, avatarUrl, userColor, mode, liveblocksClient, cleanup, setStatus, setPeerCount]);
+
+  // Guest mode auto-save to localStorage
+  useEffect(() => {
+    if (mode !== "guest" || !isSynced) return;
+
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastShapes = useWhiteboardStore.getState().shapes;
+
+    // Subscribe to Zustand shapes changes
+    const unsubStore = useWhiteboardStore.subscribe((state) => {
+      const currentShapes = state.shapes;
+      if (currentShapes === lastShapes) return;
+      lastShapes = currentShapes;
+
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveGuestBoard(boardId, Object.values(currentShapes), boardName);
+      }, 2000);
+    });
+
+    return () => {
+      unsubStore();
+      if (saveTimer) clearTimeout(saveTimer);
+    };
+  }, [boardId, boardName, mode, isSynced]);
 
   return {
+    shapesMap,
+    undoManager,
     awarenessManager,
     connectionStatus,
     peerCount,

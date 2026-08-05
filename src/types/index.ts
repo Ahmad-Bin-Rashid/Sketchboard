@@ -156,3 +156,6 @@ export interface TeamMemberWithUser {
     avatarUrl: string | null;
   };
 }
+
+export * from "./whiteboard";
+
