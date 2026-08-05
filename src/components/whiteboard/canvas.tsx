@@ -5,6 +5,8 @@ import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { screenToCanvas } from "@/lib/coordinate-helpers";
 import type { CustomShape } from "@/types/whiteboard";
+import { ShapeRenderer } from "./shapes/shape-renderer";
+
 
 interface CanvasProps {
   shapesMap: Y.Map<CustomShape> | null;
@@ -251,10 +253,22 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
           height: "100%",
         }}
       >
-        {/* Placeholder for Shape Renderer (Phase 3) */}
-        <div className="absolute inset-0 pointer-events-none text-muted-foreground/30 flex items-center justify-center text-sm font-light">
-          Canvas Coords: Pan ({Math.round(pan.x)}, {Math.round(pan.y)}), Zoom {zoom.toFixed(2)}x
-        </div>
+        {Object.values(shapes)
+          .sort((a, b) => a.index.localeCompare(b.index))
+          .map((shape) => (
+            <ShapeRenderer
+              key={shape.id}
+              shape={shape}
+              shapesMap={shapesMap}
+            />
+          ))}
+        {draftShape && (
+          <ShapeRenderer
+            shape={draftShape}
+            shapesMap={shapesMap}
+            isDraft
+          />
+        )}
       </div>
     </div>
   );
