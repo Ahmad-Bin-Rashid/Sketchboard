@@ -3,9 +3,12 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
-import { screenToCanvas } from "@/lib/coordinate-helpers";
+import { screenToCanvas, pointsToBoundingBox, simplifyPath } from "@/lib/coordinate-helpers";
 import type { CustomShape } from "@/types/whiteboard";
 import { ShapeRenderer } from "./shapes/shape-renderer";
+import { nanoid } from "nanoid";
+import { generateNewTopIndex } from "@/lib/fractional-index";
+
 
 
 interface CanvasProps {
@@ -21,8 +24,11 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
     setPan,
     setZoom,
     activeTool,
+    setActiveTool,
     shapes,
     draftShape,
+    setDraftShape,
+    setSelectedShapeIds,
     rubberBandRect,
   } = useWhiteboardStore();
 
@@ -43,7 +49,6 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space") {
-        // Prevent default spacebar page scrolling
         e.preventDefault();
         setIsSpacePressed(true);
       }
@@ -64,34 +69,97 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
     };
   }, []);
 
-  // Pan action triggers: pointerdown
+  // Pointer Down handler
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!viewportRef.current) return;
+      
       const isMiddleClick = e.button === 1;
       const isSpacePan = e.button === 0 && isSpacePressed;
 
-      if (isMiddleClick || isSpacePan || activeTool === "select") {
-        // Check if clicked directly on blank canvas area (or selection box background)
-        const target = e.target as HTMLElement;
-        const isCanvasBackground =
-          target.classList.contains("canvas-bg-grid") ||
-          target.classList.contains("canvas-viewport") ||
-          target.classList.contains("board-container");
+      // 1. Check if panning is triggered
+      if (isMiddleClick || isSpacePan) {
+        setIsPanning(true);
+        panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+        return;
+      }
 
-        // Middle-click and Spacebar-click can always pan.
-        // Left-click with select tool can only pan if clicking on empty background.
-        if (isMiddleClick || isSpacePan || isCanvasBackground) {
-          setIsPanning(true);
-          panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-          e.currentTarget.setPointerCapture(e.pointerId);
-          e.stopPropagation();
-          return;
+      const target = e.target as HTMLElement;
+      const isCanvasBackground =
+        target.classList.contains("canvas-bg-grid") ||
+        target.classList.contains("canvas-viewport") ||
+        target.classList.contains("board-container");
+
+      // 2. Select tool click panning on empty background
+      if (activeTool === "select" && isCanvasBackground) {
+        // Deselect when clicking empty background
+        setSelectedShapeIds([]);
+        
+        setIsPanning(true);
+        panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+        return;
+      }
+
+      // 3. Shape Creation Mode
+      if (activeTool !== "select" && e.button === 0 && isCanvasBackground) {
+        const rect = viewportRef.current.getBoundingClientRect();
+        const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+        dragStartRef.current = canvasPos;
+
+        const id = nanoid();
+        const index = generateNewTopIndex(Object.values(shapes));
+
+        let newShape: CustomShape;
+
+        if (activeTool === "draw") {
+          newShape = {
+            id,
+            type: "draw",
+            x: canvasPos.x,
+            y: canvasPos.y,
+            width: 0,
+            height: 0,
+            fill: "transparent",
+            stroke: "#78716c", // default Stone color
+            strokeWidth: 4,
+            opacity: 1.0,
+            index,
+            points: [[canvasPos.x, canvasPos.y, e.pressure || 0.5]],
+          };
+        } else {
+          const defaultFill = activeTool === "sticky" ? "#fef9c3" : "transparent";
+          const defaultStroke = activeTool === "sticky" ? "#1e293b" : "#78716c";
+          
+          newShape = {
+            id,
+            type: activeTool,
+            x: canvasPos.x,
+            y: canvasPos.y,
+            width: 0,
+            height: 0,
+            fill: defaultFill,
+            stroke: defaultStroke,
+            strokeWidth: 2,
+            opacity: 1.0,
+            index,
+            ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: 16 } : {}),
+            ...(activeTool === "text" ? { fontFamily: "sans-serif" } : {}),
+          } as CustomShape;
         }
+
+        setDraftShape(newShape);
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.stopPropagation();
       }
     },
-    [activeTool, isSpacePressed, pan]
+    [activeTool, isSpacePressed, pan, zoom, shapes, setDraftShape, setSelectedShapeIds, viewportRef]
   );
 
+  // Pointer Move handler
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (isPanning) {
@@ -101,10 +169,48 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
         e.stopPropagation();
         return;
       }
+
+      if (draftShape && viewportRef.current) {
+        const rect = viewportRef.current.getBoundingClientRect();
+        const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+
+        if (draftShape.type === "draw") {
+          const nextPoints = [
+            ...draftShape.points,
+            [canvasPos.x, canvasPos.y, e.pressure || 0.5] as [number, number, number],
+          ];
+          const bounds = pointsToBoundingBox(nextPoints);
+
+          setDraftShape({
+            ...draftShape,
+            points: nextPoints,
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+          });
+        } else {
+          const start = dragStartRef.current;
+          const x = Math.min(start.x, canvasPos.x);
+          const y = Math.min(start.y, canvasPos.y);
+          const width = Math.abs(canvasPos.x - start.x);
+          const height = Math.abs(canvasPos.y - start.y);
+
+          setDraftShape({
+            ...draftShape,
+            x,
+            y,
+            width,
+            height,
+          });
+        }
+        e.stopPropagation();
+      }
     },
-    [isPanning, setPan]
+    [isPanning, draftShape, pan, zoom, setPan, setDraftShape, viewportRef]
   );
 
+  // Pointer Up handler
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (isPanning) {
@@ -113,9 +219,61 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
         e.stopPropagation();
         return;
       }
+
+      if (draftShape) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        e.stopPropagation();
+
+        let finalShape = { ...draftShape };
+        let isValid = true;
+
+        if (finalShape.type === "draw") {
+          // Simplify freehand path using Douglas-Peucker
+          const simplified = simplifyPath(finalShape.points, 1.5);
+          const bounds = pointsToBoundingBox(simplified);
+          
+          if (simplified.length < 2 || (bounds.width < 5 && bounds.height < 5)) {
+            isValid = false;
+          } else {
+            finalShape.points = simplified;
+            finalShape.x = bounds.x;
+            finalShape.y = bounds.y;
+            finalShape.width = bounds.width;
+            finalShape.height = bounds.height;
+          }
+        } else {
+          // If shape has no size (single click-create), apply defaults for text/sticky
+          if (finalShape.width < 5 || finalShape.height < 5) {
+            if (finalShape.type === "text" || finalShape.type === "sticky") {
+              finalShape.width = 160;
+              finalShape.height = finalShape.type === "text" ? 40 : 120;
+              // Center the clicked coordinate as the shape's center
+              finalShape.x = finalShape.x - finalShape.width / 2;
+              finalShape.y = finalShape.y - finalShape.height / 2;
+            } else {
+              isValid = false;
+            }
+          }
+        }
+
+        if (isValid && shapesMap) {
+          const doc = shapesMap.doc;
+          if (doc) {
+            doc.transact(() => {
+              shapesMap.set(finalShape.id, finalShape);
+            });
+          }
+          // Focus selection on the newly created shape
+          setSelectedShapeIds([finalShape.id]);
+        }
+
+        setDraftShape(null);
+        setActiveTool("select");
+      }
     },
-    [isPanning]
+    [isPanning, draftShape, shapesMap, setDraftShape, setActiveTool, setSelectedShapeIds]
   );
+
 
   // Zoom centered under pointer: wheel scroll
   const handleWheel = useCallback(
@@ -214,6 +372,52 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
     touchStartRef.current = null;
   }, []);
 
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      const isCanvasBackground =
+        target.classList.contains("canvas-bg-grid") ||
+        target.classList.contains("canvas-viewport") ||
+        target.classList.contains("board-container");
+
+      if (isCanvasBackground && shapesMap && viewportRef.current) {
+        const rect = viewportRef.current.getBoundingClientRect();
+        const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+
+        const id = nanoid();
+        const index = generateNewTopIndex(Object.values(shapes));
+        
+        const newShape: CustomShape = {
+          id,
+          type: "text",
+          x: canvasPos.x - 80, // Center on double click coordinate
+          y: canvasPos.y - 20,
+          width: 160,
+          height: 40,
+          fill: "transparent",
+          stroke: "#78716c", // default Stone
+          strokeWidth: 2,
+          opacity: 1.0,
+          index,
+          text: "",
+          fontSize: 16,
+          fontFamily: "sans-serif",
+        };
+
+        const doc = shapesMap.doc;
+        if (doc) {
+          doc.transact(() => {
+            shapesMap.set(id, newShape);
+          });
+        }
+        
+        setActiveTool("select");
+        setSelectedShapeIds([id]);
+      }
+    },
+    [shapesMap, pan, zoom, shapes, setActiveTool, setSelectedShapeIds, viewportRef]
+  );
+
   return (
     <div
       ref={viewportRef}
@@ -230,6 +434,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef }: CanvasProps) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onDoubleClick={handleDoubleClick}
     >
       {/* Decorative Canvas Background Grid Pattern */}
       <div

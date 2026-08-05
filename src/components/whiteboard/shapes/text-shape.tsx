@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { TextShape as TextShapeType } from "@/types/whiteboard";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 
 interface TextShapeProps {
   shape: TextShapeType;
@@ -17,6 +18,16 @@ export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProp
       textareaRef.current.select();
     }
   }, [isEditing]);
+
+  // Auto-enter edit mode if the shape is selected and empty (e.g. just created)
+  const { selectedShapeIds } = useWhiteboardStore();
+  const isSelected = selectedShapeIds.includes(shape.id);
+
+  useEffect(() => {
+    if (isSelected && shape.text === "" && !isReadOnly) {
+      setIsEditing(true);
+    }
+  }, [isSelected, shape.text, isReadOnly]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isReadOnly) return;

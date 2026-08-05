@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { StickyShape as StickyShapeType } from "@/types/whiteboard";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 
 interface StickyShapeProps {
   shape: StickyShapeType;
@@ -17,6 +18,16 @@ export function StickyShape({ shape, onUpdate, isReadOnly = false }: StickyShape
       textareaRef.current.select();
     }
   }, [isEditing]);
+
+  // Auto-enter edit mode if the shape is selected and empty (e.g. just created)
+  const { selectedShapeIds } = useWhiteboardStore();
+  const isSelected = selectedShapeIds.includes(shape.id);
+
+  useEffect(() => {
+    if (isSelected && shape.text === "" && !isReadOnly) {
+      setIsEditing(true);
+    }
+  }, [isSelected, shape.text, isReadOnly]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isReadOnly) return;
