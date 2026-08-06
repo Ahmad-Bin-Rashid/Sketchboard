@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { nanoid } from "nanoid";
 import type { CustomShape } from "@/types/whiteboard";
-import { generateIndex } from "./fractional-index";
+import { generateIndex, generateNewTopIndex } from "./fractional-index";
 
 /**
  * Duplicates the selected shapes, offsetting their positions slightly.
@@ -259,3 +259,66 @@ export function fitToContent(
   setZoom(clampedZoom);
   setPan({ x: newPanX, y: newPanY });
 }
+
+/**
+ * Deletes selected shapes from the Yjs map.
+ */
+export function deleteShapes(ids: string[], shapesMap: Y.Map<CustomShape> | null) {
+  if (!shapesMap || ids.length === 0) return;
+  const doc = shapesMap.doc;
+  if (doc) {
+    doc.transact(() => {
+      ids.forEach((id) => shapesMap.delete(id));
+    });
+  }
+}
+
+/**
+ * Uploads media files and inserts image shapes onto the canvas.
+ */
+export async function addImageShapes(
+  files: File[],
+  canvasPos: { x: number; y: number },
+  shapesList: CustomShape[],
+  shapesMap: Y.Map<CustomShape> | null,
+  uploadMedia: (file: File) => Promise<string>,
+  setSelectedShapeIds: (ids: string[]) => void
+) {
+  if (!shapesMap) return;
+  const doc = shapesMap.doc;
+  if (!doc) return;
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const url = await uploadMedia(file);
+      
+      const id = nanoid();
+      const index = generateNewTopIndex(shapesList);
+      const offset = i * 20;
+
+      const newShape: CustomShape = {
+        id,
+        type: "image",
+        x: canvasPos.x - 100 + offset,
+        y: canvasPos.y - 100 + offset,
+        width: 200,
+        height: 200,
+        fill: "transparent",
+        stroke: "transparent",
+        strokeWidth: 0,
+        opacity: 1.0,
+        index,
+        src: url,
+      };
+
+      doc.transact(() => {
+        shapesMap.set(id, newShape);
+      });
+      setSelectedShapeIds([id]);
+    } catch (err) {
+      console.error("Failed to upload image:", err);
+    }
+  }
+}
+

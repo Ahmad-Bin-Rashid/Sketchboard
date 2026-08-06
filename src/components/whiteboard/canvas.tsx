@@ -9,6 +9,8 @@ import { ShapeRenderer } from "./shapes/shape-renderer";
 import { SelectionBox } from "./selection-box";
 import { nanoid } from "nanoid";
 import { generateNewTopIndex } from "@/lib/fractional-index";
+import { SHAPE_DEFAULTS } from "@/lib/constants";
+import { addImageShapes } from "@/lib/board-actions";
 
 
 
@@ -140,15 +142,15 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             width: 0,
             height: 0,
             fill: "transparent",
-            stroke: "#78716c", // default Stone color
+            stroke: SHAPE_DEFAULTS.STROKE, // default Stone color
             strokeWidth: 4,
             opacity: 1.0,
             index,
             points: [[canvasPos.x, canvasPos.y, e.pressure || 0.5]],
           };
         } else {
-          const defaultFill = activeTool === "sticky" ? "#fef9c3" : "transparent";
-          const defaultStroke = activeTool === "sticky" ? "#1e293b" : "#78716c";
+          const defaultFill = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_FILL : "transparent";
+          const defaultStroke = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_STROKE : SHAPE_DEFAULTS.STROKE;
           
           newShape = {
             id,
@@ -228,10 +230,10 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             let currentY = canvasPos.y;
 
             if (snapToGrid) {
-              startX = Math.round(startX / 10) * 10;
-              startY = Math.round(startY / 10) * 10;
-              currentX = Math.round(currentX / 10) * 10;
-              currentY = Math.round(currentY / 10) * 10;
+              startX = Math.round(startX / SHAPE_DEFAULTS.GRID_SIZE) * SHAPE_DEFAULTS.GRID_SIZE;
+              startY = Math.round(startY / SHAPE_DEFAULTS.GRID_SIZE) * SHAPE_DEFAULTS.GRID_SIZE;
+              currentX = Math.round(currentX / SHAPE_DEFAULTS.GRID_SIZE) * SHAPE_DEFAULTS.GRID_SIZE;
+              currentY = Math.round(currentY / SHAPE_DEFAULTS.GRID_SIZE) * SHAPE_DEFAULTS.GRID_SIZE;
             }
 
             const x = Math.min(startX, currentX);
@@ -313,8 +315,8 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           // If shape has no size (single click-create), apply defaults for text/sticky
           if (finalShape.width < 5 || finalShape.height < 5) {
             if (finalShape.type === "text" || finalShape.type === "sticky") {
-              finalShape.width = 160;
-              finalShape.height = finalShape.type === "text" ? 40 : 120;
+              finalShape.width = SHAPE_DEFAULTS.DEFAULT_TEXT_WIDTH;
+              finalShape.height = finalShape.type === "text" ? SHAPE_DEFAULTS.DEFAULT_TEXT_HEIGHT : SHAPE_DEFAULTS.DEFAULT_STICKY_HEIGHT;
               // Center the clicked coordinate as the shape's center
               finalShape.x = finalShape.x - finalShape.width / 2;
               finalShape.y = finalShape.y - finalShape.height / 2;
@@ -485,12 +487,12 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         const newShape: CustomShape = {
           id,
           type: "text",
-          x: canvasPos.x - 80, // Center on double click coordinate
-          y: canvasPos.y - 20,
-          width: 160,
-          height: 40,
+          x: canvasPos.x - SHAPE_DEFAULTS.DEFAULT_TEXT_WIDTH / 2, // Center on double click coordinate
+          y: canvasPos.y - SHAPE_DEFAULTS.DEFAULT_TEXT_HEIGHT / 2,
+          width: SHAPE_DEFAULTS.DEFAULT_TEXT_WIDTH,
+          height: SHAPE_DEFAULTS.DEFAULT_TEXT_HEIGHT,
           fill: "transparent",
-          stroke: "#78716c", // default Stone
+          stroke: SHAPE_DEFAULTS.STROKE, // default Stone
           strokeWidth: 2,
           opacity: 1.0,
           index,
@@ -529,41 +531,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       const rect = viewportRef.current.getBoundingClientRect();
       const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
 
-      for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        try {
-          const url = await uploadMedia(file);
-          
-          const id = nanoid();
-          const index = generateNewTopIndex(Object.values(shapes));
-          const offset = i * 20;
-
-          const newShape: CustomShape = {
-            id,
-            type: "image",
-            x: canvasPos.x - 100 + offset,
-            y: canvasPos.y - 100 + offset,
-            width: 200,
-            height: 200,
-            fill: "transparent",
-            stroke: "transparent",
-            strokeWidth: 0,
-            opacity: 1.0,
-            index,
-            src: url,
-          };
-
-          const doc = shapesMap.doc;
-          if (doc) {
-            doc.transact(() => {
-              shapesMap.set(id, newShape);
-            });
-          }
-          setSelectedShapeIds([id]);
-        } catch (err) {
-          console.error("Failed to upload dropped image:", err);
-        }
-      }
+      await addImageShapes(imageFiles, canvasPos, Object.values(shapes), shapesMap, uploadMedia, setSelectedShapeIds);
     },
     [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef]
   );
@@ -583,41 +551,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       const clientY = rect.top + rect.height / 2;
       const canvasPos = screenToCanvas(clientX, clientY, pan, zoom, rect);
 
-      for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        try {
-          const url = await uploadMedia(file);
-          
-          const id = nanoid();
-          const index = generateNewTopIndex(Object.values(shapes));
-          const offset = i * 20;
-
-          const newShape: CustomShape = {
-            id,
-            type: "image",
-            x: canvasPos.x - 100 + offset,
-            y: canvasPos.y - 100 + offset,
-            width: 200,
-            height: 200,
-            fill: "transparent",
-            stroke: "transparent",
-            strokeWidth: 0,
-            opacity: 1.0,
-            index,
-            src: url,
-          };
-
-          const doc = shapesMap.doc;
-          if (doc) {
-            doc.transact(() => {
-              shapesMap.set(id, newShape);
-            });
-          }
-          setSelectedShapeIds([id]);
-        } catch (err) {
-          console.error("Failed to upload pasted image:", err);
-        }
-      }
+      await addImageShapes(imageFiles, canvasPos, Object.values(shapes), shapesMap, uploadMedia, setSelectedShapeIds);
     },
     [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef]
   );

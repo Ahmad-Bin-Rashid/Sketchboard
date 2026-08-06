@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
+import { deleteShapes } from "@/lib/board-actions";
 
 export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
   useEffect(() => {
@@ -35,14 +36,7 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedShapeIds.length > 0) {
           e.preventDefault();
-          const doc = shapesMap.doc;
-          if (doc) {
-            doc.transact(() => {
-              selectedShapeIds.forEach((id) => {
-                shapesMap.delete(id);
-              });
-            });
-          }
+          deleteShapes(selectedShapeIds, shapesMap);
           setSelectedShapeIds([]);
         }
       }

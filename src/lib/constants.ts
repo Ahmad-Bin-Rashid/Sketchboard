@@ -108,3 +108,17 @@ export const CURSOR_COLORS = [
   "#6b8f71", // moss
   "#8a6b7e", // mauve
 ] as const;
+
+// ─── Shape Defaults ──────────────────────────────────────────────────────────
+
+export const SHAPE_DEFAULTS = {
+  STROKE: "#78716c", // default warm stone color
+  STICKY_FILL: "#fef9c3", // default yellow sticky note
+  STICKY_STROKE: "#1e293b",
+  GRID_SIZE: 10,
+  DEFAULT_TEXT_WIDTH: 160,
+  DEFAULT_TEXT_HEIGHT: 40,
+  DEFAULT_STICKY_HEIGHT: 120,
+  DEFAULT_IMAGE_SIZE: 200,
+} as const;
+
