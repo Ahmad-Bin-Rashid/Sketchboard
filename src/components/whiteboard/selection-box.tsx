@@ -100,27 +100,33 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
       let deltaX = (e.clientX - startPointerRef.current.x) / zoom;
       let deltaY = (e.clientY - startPointerRef.current.y) / zoom;
 
-      if (snapToGrid) {
-        deltaX = Math.round(deltaX / 10) * 10;
-        deltaY = Math.round(deltaY / 10) * 10;
-      }
-
       if (isDragging) {
         // Drag-move all selected shapes
         const updatedShapes: CustomShape[] = [];
         
         Object.entries(startShapesRef.current).forEach(([id, startShape]) => {
+          let targetX = startShape.x + deltaX;
+          let targetY = startShape.y + deltaY;
+
+          if (snapToGrid) {
+            targetX = Math.round(targetX / 10) * 10;
+            targetY = Math.round(targetY / 10) * 10;
+          }
+
+          const actualDeltaX = targetX - startShape.x;
+          const actualDeltaY = targetY - startShape.y;
+
           const updated = {
             ...startShape,
-            x: startShape.x + deltaX,
-            y: startShape.y + deltaY,
+            x: targetX,
+            y: targetY,
           } as CustomShape;
 
           // For pencil shapes, we also shift all vector points
           if (updated.type === "draw" && startShape.type === "draw") {
             updated.points = startShape.points.map(([px, py, pr]) => [
-              px + deltaX,
-              py + deltaY,
+              px + actualDeltaX,
+              py + actualDeltaY,
               pr,
             ]);
           }

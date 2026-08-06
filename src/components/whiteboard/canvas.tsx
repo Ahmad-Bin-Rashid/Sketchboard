@@ -220,10 +220,24 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             });
           } else {
             const start = dragStartRef.current;
-            const x = Math.min(start.x, canvasPos.x);
-            const y = Math.min(start.y, canvasPos.y);
-            const width = Math.abs(canvasPos.x - start.x);
-            const height = Math.abs(canvasPos.y - start.y);
+            const { snapToGrid } = useWhiteboardStore.getState();
+
+            let startX = start.x;
+            let startY = start.y;
+            let currentX = canvasPos.x;
+            let currentY = canvasPos.y;
+
+            if (snapToGrid) {
+              startX = Math.round(startX / 10) * 10;
+              startY = Math.round(startY / 10) * 10;
+              currentX = Math.round(currentX / 10) * 10;
+              currentY = Math.round(currentY / 10) * 10;
+            }
+
+            const x = Math.min(startX, currentX);
+            const y = Math.min(startY, currentY);
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
 
             setDraftShape({
               ...draftShape,
@@ -631,10 +645,9 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           className="canvas-bg-grid absolute inset-0 pointer-events-none"
           style={{
             backgroundImage:
-              "radial-gradient(var(--panel-border) 1px, transparent 1px)",
-            backgroundSize: "20px 20px",
+              "radial-gradient(var(--canvas-grid) 1.5px, transparent 1.5px)",
+            backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
             backgroundPosition: `${pan.x}px ${pan.y}px`,
-            opacity: 0.4,
           }}
         />
       )}

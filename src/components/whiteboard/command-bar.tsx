@@ -584,8 +584,8 @@ export function CommandBar({
 
         <div className="w-[1px] h-4 bg-panel-border mx-1" />
 
-        {/* Group 7: View Fits */}
-        <div className="flex items-center">
+        {/* Group 7: View Fits (No need for zoom options in Command Bar - Keep it commented for now) */}
+        {/* <div className="flex items-center">
           <button
             onClick={() => fitToContent(shapesList, viewportRef, setPan, setZoom)}
             className="p-1.5 rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
@@ -626,10 +626,9 @@ export function CommandBar({
           >
             100%
           </button>
-        </div>
+        </div> */}
       </div>
 
-      {/* Embed insertion modal/dialog */}
       {/* Embed insertion modal/dialog */}
       {showEmbedDialog && (
         <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
