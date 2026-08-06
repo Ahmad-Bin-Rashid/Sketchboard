@@ -126,26 +126,60 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
             </div>
           </div>
 
-          {/* Line/Stroke Width */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] text-muted-foreground font-medium uppercase">
-              Width
-            </span>
-            <div className="flex items-center gap-1.5 h-6">
-              {[2, 4, 8].map((w) => (
-                <button
-                  key={w}
-                  onClick={() => updateSelectedShapeStyle(() => ({ strokeWidth: w }))}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-xs font-semibold hover:bg-surface-hover transition",
-                    selectedShape.strokeWidth === w ? "bg-primary text-primary-foreground" : "bg-panel-bg text-foreground"
-                  )}
-                >
-                  {w}px
-                </button>
-              ))}
+          {/* Line/Stroke Width or Font Size */}
+          {selectedShape.type === "text" || selectedShape.type === "sticky" ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-muted-foreground font-medium uppercase">
+                Size
+              </span>
+              <div className="flex items-center gap-1.5 h-6">
+                {[
+                  { label: "S", value: 12 },
+                  { label: "M", value: 16 },
+                  { label: "L", value: 24 },
+                  { label: "XL", value: 36 },
+                ].map((sz) => {
+                  const currentSize = (selectedShape as any).fontSize ?? 16;
+                  return (
+                    <button
+                      key={sz.label}
+                      onClick={() =>
+                        updateSelectedShapeStyle(() => ({ fontSize: sz.value }))
+                      }
+                      className={cn(
+                        "px-2 py-0.5 rounded text-xs font-semibold hover:bg-surface-hover transition",
+                        currentSize === sz.value
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-panel-bg text-foreground"
+                      )}
+                    >
+                      {sz.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-muted-foreground font-medium uppercase">
+                Width
+              </span>
+              <div className="flex items-center gap-1.5 h-6">
+                {[2, 4, 8].map((w) => (
+                  <button
+                    key={w}
+                    onClick={() => updateSelectedShapeStyle(() => ({ strokeWidth: w }))}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-xs font-semibold hover:bg-surface-hover transition",
+                      selectedShape.strokeWidth === w ? "bg-primary text-primary-foreground" : "bg-panel-bg text-foreground"
+                    )}
+                  >
+                    {w}px
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Opacity */}
           <div className="flex flex-col gap-1">

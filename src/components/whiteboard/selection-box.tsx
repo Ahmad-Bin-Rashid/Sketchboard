@@ -96,8 +96,14 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!shapesMap || !boxBounds) return;
 
-      const deltaX = (e.clientX - startPointerRef.current.x) / zoom;
-      const deltaY = (e.clientY - startPointerRef.current.y) / zoom;
+      const { snapToGrid } = useWhiteboardStore.getState();
+      let deltaX = (e.clientX - startPointerRef.current.x) / zoom;
+      let deltaY = (e.clientY - startPointerRef.current.y) / zoom;
+
+      if (snapToGrid) {
+        deltaX = Math.round(deltaX / 10) * 10;
+        deltaY = Math.round(deltaY / 10) * 10;
+      }
 
       if (isDragging) {
         // Drag-move all selected shapes
@@ -271,6 +277,8 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
         height: boxBounds.height,
         cursor: isDragging ? "grabbing" : "grab",
         borderWidth: `${borderWidth}px`,
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        zIndex: 500,
       }}
       onPointerDown={(e) => handlePointerDown(e, null)}
       onPointerMove={handlePointerMove}
@@ -281,7 +289,7 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
         <div
           key={h.type}
           onPointerDown={(e) => handlePointerDown(e, h.type)}
-          className="absolute rounded-full border border-primary bg-panel-bg shadow-sm transition hover:scale-125"
+          className="absolute rounded-full border border-primary bg-panel-bg shadow-sm transition hover:scale-125 pointer-events-auto"
           style={{
             ...h.style,
             borderWidth: `${1 / zoom}px`,

@@ -17,6 +17,11 @@ export interface WhiteboardState {
   draftShape: CustomShape | null;
   rubberBandRect: { x: number; y: number; width: number; height: number } | null;
 
+  // Preferences
+  showGrid: boolean;
+  snapToGrid: boolean;
+  focusMode: boolean;
+
   // Viewport Actions
   setPan: (pan: { x: number; y: number }) => void;
   setZoom: (zoom: number) => void;
@@ -37,6 +42,11 @@ export interface WhiteboardState {
   setRubberBandRect: (
     rect: { x: number; y: number; width: number; height: number } | null
   ) => void;
+
+  // Preferences Actions
+  setShowGrid: (show: boolean) => void;
+  setSnapToGrid: (snap: boolean) => void;
+  setFocusMode: (focus: boolean) => void;
 }
 
 export const useWhiteboardStore = create<WhiteboardState>((set) => ({
@@ -47,6 +57,9 @@ export const useWhiteboardStore = create<WhiteboardState>((set) => ({
   shapes: {},
   draftShape: null,
   rubberBandRect: null,
+  showGrid: true,
+  snapToGrid: false,
+  focusMode: false,
 
   setPan: (pan) => set({ pan }),
   setZoom: (zoom) => set({ zoom }),
@@ -77,4 +90,7 @@ export const useWhiteboardStore = create<WhiteboardState>((set) => ({
     }),
   setDraftShape: (draftShape) => set({ draftShape }),
   setRubberBandRect: (rubberBandRect) => set({ rubberBandRect }),
+  setShowGrid: (showGrid) => set({ showGrid }),
+  setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
+  setFocusMode: (focusMode) => set({ focusMode }),
 }));

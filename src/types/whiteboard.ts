@@ -1,4 +1,4 @@
-export type ShapeType = "rectangle" | "ellipse" | "draw" | "text" | "sticky" | "image";
+export type ShapeType = "rectangle" | "ellipse" | "draw" | "text" | "sticky" | "image" | "embed";
 export type ToolType = ShapeType | "select";
 
 export interface BaseShape {
@@ -46,10 +46,16 @@ export interface ImageShape extends BaseShape {
   src: string; // CDN or base64 URL
 }
 
+export interface EmbedShape extends BaseShape {
+  type: "embed";
+  src: string; // Embed source URL (YouTube, Figma, Loom, Google Maps)
+}
+
 export type CustomShape =
   | RectShape
   | EllipseShape
   | DrawShape
   | TextShape
   | StickyShape
-  | ImageShape;
+  | ImageShape
+  | EmbedShape;

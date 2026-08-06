@@ -8,6 +8,7 @@ import { DrawShape } from "./draw-shape";
 import { TextShape } from "./text-shape";
 import { StickyShape } from "./sticky-shape";
 import { ImageShape } from "./image-shape";
+import { EmbedShape } from "./embed-shape";
 import { cn } from "@/lib/utils";
 
 interface ShapeRendererProps {
@@ -17,7 +18,7 @@ interface ShapeRendererProps {
 }
 
 export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRendererProps) {
-  const { activeTool, selectedShapeIds, setSelectedShapeIds, addToSelection } =
+  const { activeTool, selectedShapeIds, setSelectedShapeIds, addToSelection, shapes } =
     useWhiteboardStore();
 
   const isSelected = selectedShapeIds.includes(shape.id) && !isDraft;
@@ -31,16 +32,98 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     }
   };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (isDraft || activeTool !== "select") return;
+  const [isDragging, setIsDragging] = React.useState(false);
+  const startPointerRef = React.useRef({ x: 0, y: 0 });
+  const startShapesRef = React.useRef<Record<string, CustomShape>>({});
 
-    e.stopPropagation(); // Prevent canvas background click handler (deselection)
-    
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDraft || activeTool !== "select") return;
+    if (e.button !== 0) return; // Left click only
+
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    const isAlreadySelected = selectedShapeIds.includes(shape.id);
+    let currentSelection = selectedShapeIds;
+
     if (e.shiftKey) {
       addToSelection(shape.id);
-    } else {
+      if (isAlreadySelected) {
+        currentSelection = selectedShapeIds.filter(id => id !== shape.id);
+      } else {
+        currentSelection = [...selectedShapeIds, shape.id];
+      }
+    } else if (!isAlreadySelected) {
       setSelectedShapeIds([shape.id]);
+      currentSelection = [shape.id];
     }
+
+    startPointerRef.current = { x: e.clientX, y: e.clientY };
+
+    const snapshot: Record<string, CustomShape> = {};
+    currentSelection.forEach((id) => {
+      const s = shapes[id];
+      if (s) {
+        snapshot[id] = { ...s };
+      }
+    });
+    startShapesRef.current = snapshot;
+    setIsDragging(true);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || !shapesMap) return;
+    e.stopPropagation();
+
+    const { zoom, snapToGrid } = useWhiteboardStore.getState();
+    let deltaX = (e.clientX - startPointerRef.current.x) / zoom;
+    let deltaY = (e.clientY - startPointerRef.current.y) / zoom;
+
+    if (snapToGrid) {
+      deltaX = Math.round(deltaX / 10) * 10;
+      deltaY = Math.round(deltaY / 10) * 10;
+    }
+
+    const updatedShapes: CustomShape[] = [];
+
+    Object.entries(startShapesRef.current).forEach(([id, startShape]) => {
+      const updated = {
+        ...startShape,
+        x: startShape.x + deltaX,
+        y: startShape.y + deltaY,
+      } as CustomShape;
+
+      if (updated.type === "draw" && startShape.type === "draw") {
+        updated.points = startShape.points.map(([px, py, pr]) => [
+          px + deltaX,
+          py + deltaY,
+          pr,
+        ]);
+      }
+
+      updatedShapes.push(updated);
+    });
+
+    const store = useWhiteboardStore.getState();
+    const nextShapes = { ...store.shapes };
+    updatedShapes.forEach((s) => {
+      nextShapes[s.id] = s;
+    });
+    store.setShapes(nextShapes);
+
+    const doc = shapesMap.doc;
+    if (doc) {
+      doc.transact(() => {
+        updatedShapes.forEach((s) => shapesMap.set(s.id, s));
+      });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setIsDragging(false);
   };
 
   const renderShape = () => {
@@ -69,6 +152,14 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
         );
       case "image":
         return <ImageShape shape={shape} />;
+      case "embed":
+        return (
+          <EmbedShape
+            shape={shape as any}
+            onUpdate={handleUpdate as any}
+            isReadOnly={isDraft}
+          />
+        );
       default:
         return null;
     }
@@ -92,6 +183,8 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
         pointerEvents: activeTool === "select" && !isDraft ? "auto" : "none",
       }}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
     >
       {renderShape()}
     </div>

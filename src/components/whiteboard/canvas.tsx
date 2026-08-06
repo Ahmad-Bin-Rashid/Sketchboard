@@ -33,6 +33,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
     setSelectedShapeIds,
     rubberBandRect,
     setRubberBandRect,
+    showGrid,
   } = useWhiteboardStore();
 
   console.log("[Canvas] Rendered. Zoom:", zoom, "Pan:", pan);
@@ -53,6 +54,14 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
   // Monitor Spacebar key state globally for panning mode toggles
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+      ) {
+        return;
+      }
       if (e.code === "Space") {
         e.preventDefault();
         setIsSpacePressed(true);
@@ -617,16 +626,18 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       onPaste={handlePaste}
     >
       {/* Decorative Canvas Background Grid Pattern */}
-      <div
-        className="canvas-bg-grid absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "radial-gradient(var(--panel-border) 1px, transparent 1px)",
-          backgroundSize: "20px 20px",
-          backgroundPosition: `${pan.x}px ${pan.y}px`,
-          opacity: 0.4,
-        }}
-      />
+      {showGrid && (
+        <div
+          className="canvas-bg-grid absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage:
+              "radial-gradient(var(--panel-border) 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+            backgroundPosition: `${pan.x}px ${pan.y}px`,
+            opacity: 0.4,
+          }}
+        />
+      )}
 
       {/* Inner transformation layer */}
       <div

@@ -36,6 +36,8 @@ import { GuestNameModal } from "./guest-name-modal";
 import { UploadToastManager, type ToastEntry } from "./upload-toast";
 import { Canvas } from "./canvas";
 import { Toolbar } from "./toolbar";
+import { CommandBar } from "./command-bar";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -177,7 +179,9 @@ export function Whiteboard({
 
   // Keyboard Shortcuts Hook
   useWhiteboardKeyboard(shapesMap);
-  useUndoRedo(undoManager);
+  const undoRedoState = useUndoRedo(undoManager);
+
+  const focusMode = useWhiteboardStore((s) => s.focusMode);
 
   // Cursor Broadcast Hook
   useCursorBroadcast({ viewportRef, awarenessManager });
@@ -249,35 +253,52 @@ export function Whiteboard({
       )}
 
       {/* Board header */}
-      <BoardHeader
+      {!focusMode && (
+        <BoardHeader
+          boardId={boardId}
+          boardName={boardName}
+          peerCount={peerCount}
+          connectionStatus={connectionStatus}
+          collaborators={collaborators}
+          mode={mode}
+          role={role}
+          shapesMap={shapesMap}
+          guestName={mode === "guest" ? guestName : undefined}
+          onRename={handleBoardRename}
+          onChangeName={mode === "guest" ? () => setShowNameModal(true) : undefined}
+        />
+      )}
+
+      {/* Floating Command Bar (top-center) */}
+      <CommandBar
+        shapesMap={shapesMap}
+        canUndo={undoRedoState.canUndo}
+        canRedo={undoRedoState.canRedo}
+        undo={undoRedoState.undo}
+        redo={undoRedoState.redo}
+        viewportRef={viewportRef}
         boardId={boardId}
         boardName={boardName}
-        peerCount={peerCount}
-        connectionStatus={connectionStatus}
-        collaborators={collaborators}
-        mode={mode}
-        role={role}
-        shapesMap={shapesMap}
-        guestName={mode === "guest" ? guestName : undefined}
         onRename={handleBoardRename}
-        onChangeName={mode === "guest" ? () => setShowNameModal(true) : undefined}
       />
 
       {/* Main floating pill toolbar */}
-      <Toolbar shapesMap={shapesMap} />
+      {!focusMode && <Toolbar shapesMap={shapesMap} />}
 
       {/* Upload progress toasts — bottom-right, above toolbar */}
       <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />
 
       {/* Connection and Zoom indicators — bottom-left */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[200] flex items-center gap-2">
-        <div className="pointer-events-auto">
-          <ZoomIndicator viewportRef={viewportRef} />
+      {!focusMode && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[200] flex items-center gap-2">
+          <div className="pointer-events-auto">
+            <ZoomIndicator viewportRef={viewportRef} />
+          </div>
+          <div className="pointer-events-auto">
+            <ConnectionIndicator />
+          </div>
         </div>
-        <div className="pointer-events-auto">
-          <ConnectionIndicator />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

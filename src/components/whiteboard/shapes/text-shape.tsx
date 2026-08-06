@@ -14,8 +14,12 @@ export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProp
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.select();
+      const textarea = textareaRef.current;
+      textarea.focus();
+      textarea.select();
+      textarea.style.height = "0px";
+      const newHeight = Math.max(40, textarea.scrollHeight);
+      textarea.style.height = `${newHeight}px`;
     }
   }, [isEditing]);
 
@@ -40,7 +44,13 @@ export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProp
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onUpdate(shape.id, { text: e.target.value });
+    const text = e.target.value;
+    const textarea = e.target;
+    textarea.style.height = "0px";
+    const newHeight = Math.max(40, textarea.scrollHeight);
+    textarea.style.height = `${newHeight}px`;
+
+    onUpdate(shape.id, { text, height: newHeight });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
