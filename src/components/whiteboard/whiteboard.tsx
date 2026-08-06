@@ -30,6 +30,7 @@ import { useAssetStore } from "@/lib/assets";
 import { useWhiteboardKeyboard } from "@/hooks/use-whiteboard-keyboard";
 import { BoardHeader } from "./board-header";
 import { ConnectionIndicator } from "./connection-indicator";
+import { ZoomIndicator } from "./zoom-indicator";
 import { RemoteCursors } from "./remote-cursors";
 import { GuestNameModal } from "./guest-name-modal";
 import { UploadToastManager, type ToastEntry } from "./upload-toast";
@@ -268,8 +269,11 @@ export function Whiteboard({
       {/* Upload progress toasts — bottom-right, above toolbar */}
       <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />
 
-      {/* Connection indicator — bottom-left */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[200]">
+      {/* Connection and Zoom indicators — bottom-left */}
+      <div className="pointer-events-none absolute bottom-3 left-3 z-[200] flex items-center gap-2">
+        <div className="pointer-events-auto">
+          <ZoomIndicator viewportRef={viewportRef} />
+        </div>
         <div className="pointer-events-auto">
           <ConnectionIndicator />
         </div>

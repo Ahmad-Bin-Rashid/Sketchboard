@@ -35,12 +35,14 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
     setRubberBandRect,
   } = useWhiteboardStore();
 
+  console.log("[Canvas] Rendered. Zoom:", zoom, "Pan:", pan);
+
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   const dragStartRef = useRef({ x: 0, y: 0 });
 
-  // Touch tracking state
+  // Touch tracking — snapshot captured at gesture start to avoid per-frame zoom accumulation
   const touchStartRef = useRef<{
     distance: number;
     zoom: number;
@@ -76,7 +78,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!viewportRef.current) return;
-      
+
       const isMiddleClick = e.button === 1;
       const isSpacePan = e.button === 0 && isSpacePressed;
 
@@ -318,102 +320,129 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
   );
 
 
-  // Zoom centered under pointer: wheel scroll
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      if (!viewportRef.current) return;
+  // Register non-passive wheel and touch listeners directly on the viewport DOM node.
+  // This successfully prevents the browser's default webpage-zoom and swipe-navigation gestures.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
 
-      const rect = viewportRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      // Zoom factor calculation
-      const zoomFactor = 1.1;
-      const nextZoom = e.deltaY < 0 ? zoom * zoomFactor : zoom / zoomFactor;
-      const clampedZoom = Math.max(0.1, Math.min(20, nextZoom));
-
-      // Keep the coordinate under the mouse cursor fixed in space
-      const newPanX = mouseX - (mouseX - pan.x) * (clampedZoom / zoom);
-      const newPanY = mouseY - (mouseY - pan.y) * (clampedZoom / zoom);
-
-      setZoom(clampedZoom);
-      setPan({ x: newPanX, y: newPanY });
-    },
-    [pan, zoom, setPan, setZoom, viewportRef]
-  );
-
-  // Helper: compute distance between two touches
-  const getTouchDistance = (t1: React.Touch, t2: React.Touch) => {
-    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-  };
-
-  // Helper: compute midpoint between two touches
-  const getTouchMidpoint = (t1: React.Touch, t2: React.Touch, rect: DOMRect) => {
-    return {
-      x: (t1.clientX + t2.clientX) / 2 - rect.left,
-      y: (t1.clientY + t2.clientY) / 2 - rect.top,
-    };
-  };
-
-  // Touch handlers for mobile pinch-to-zoom & pan
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent<HTMLDivElement>) => {
-      if (e.touches.length === 2 && viewportRef.current) {
-        const rect = viewportRef.current.getBoundingClientRect();
+    const onTouchStartDOM = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const rect = viewport.getBoundingClientRect();
         const t1 = e.touches[0];
         const t2 = e.touches[1];
 
-        touchStartRef.current = {
-          distance: getTouchDistance(t1, t2),
-          zoom,
-          pan: { ...pan },
-          midpoint: getTouchMidpoint(t1, t2, rect),
-        };
-      }
-    },
-    [pan, zoom, viewportRef]
-  );
+        setDraftShape(null);
+        setRubberBandRect(null);
 
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent<HTMLDivElement>) => {
-      if (e.touches.length === 2 && touchStartRef.current && viewportRef.current) {
+        // Capture the gesture baseline once — all subsequent frames diff against this
+        touchStartRef.current = {
+          distance: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+          zoom: useWhiteboardStore.getState().zoom,
+          pan: { ...useWhiteboardStore.getState().pan },
+          midpoint: {
+            x: (t1.clientX + t2.clientX) / 2 - rect.left,
+            y: (t1.clientY + t2.clientY) / 2 - rect.top,
+          },
+        };
+      } else if (e.touches.length === 1 && touchStartRef.current) {
+        // One finger lifted — reset so the remaining finger can re-anchor
+        touchStartRef.current = null;
+      }
+    };
+
+    const onTouchMoveDOM = (e: TouchEvent) => {
+      if (e.touches.length === 2 && touchStartRef.current) {
         e.preventDefault();
-        const rect = viewportRef.current.getBoundingClientRect();
+        const rect = viewport.getBoundingClientRect();
         const t1 = e.touches[0];
         const t2 = e.touches[1];
 
         const start = touchStartRef.current;
-        const currentDistance = getTouchDistance(t1, t2);
-        const currentMidpoint = getTouchMidpoint(t1, t2, rect);
+        const currentDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const currentMidpoint = {
+          x: (t1.clientX + t2.clientX) / 2 - rect.left,
+          y: (t1.clientY + t2.clientY) / 2 - rect.top,
+        };
 
-        // Calculate new zoom factor
-        const scale = currentDistance / start.distance;
-        const nextZoom = start.zoom * scale;
-        const clampedZoom = Math.max(0.1, Math.min(20, nextZoom));
+        const deltaDistance = currentDistance - start.distance;
+        const zoomThreshold = 30; // 30px dead-zone to trigger zoom
+        const isZooming = Math.abs(deltaDistance) > zoomThreshold;
 
-        // Pan displacement due to midpoint movement
-        const dx = currentMidpoint.x - start.midpoint.x;
-        const dy = currentMidpoint.y - start.midpoint.y;
+        let newZoom = start.zoom;
+        if (isZooming) {
+          const zoomSensitivity = 0.005;
+          // Subtract the threshold for a smooth transition from the boundary
+          const activeDelta = deltaDistance - Math.sign(deltaDistance) * zoomThreshold;
+          // Standard: activeDelta > 0 (apart) -> zoomFactor > 1 (zoom in)
+          //           activeDelta < 0 (close) -> zoomFactor < 1 (zoom out)
+          const zoomFactor = 1 + activeDelta * zoomSensitivity;
+          newZoom = Math.max(0.1, Math.min(20, start.zoom * zoomFactor));
+        }
 
-        // Combine midpoint shift and zoom-pinning transform adjustments
-        const newPanX =
-          currentMidpoint.x -
-          (currentMidpoint.x - start.pan.x - dx) * (clampedZoom / start.zoom);
-        const newPanY =
-          currentMidpoint.y -
-          (currentMidpoint.y - start.pan.y - dy) * (clampedZoom / start.zoom);
+        // Unified pan+zoom formula mapping start midpoint canvas coordinate to current midpoint
+        const newPanX = currentMidpoint.x - (start.midpoint.x - start.pan.x) * (newZoom / start.zoom);
+        const newPanY = currentMidpoint.y - (start.midpoint.y - start.pan.y) * (newZoom / start.zoom);
+
+        if (isZooming) setZoom(newZoom);
+        setPan({ x: newPanX, y: newPanY });
+      }
+    };
+
+    const onTouchEndDOM = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchStartRef.current = null;
+      }
+    };
+
+    const onWheelDOM = (e: WheelEvent) => {
+      e.preventDefault();
+
+      const currentZoom = useWhiteboardStore.getState().zoom;
+      const currentPan = useWhiteboardStore.getState().pan;
+
+      // 1. Trackpad Pinch-to-Zoom (ctrlKey is true for pinch gestures on trackpad)
+      if (e.ctrlKey) {
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Standard zoom:
+        //   pinch-out/apart (deltaY < 0) -> zoomFactor > 1 (zoom in)
+        //   pinch-in/close (deltaY > 0) -> zoomFactor < 1 (zoom out)
+        const zoomFactor = 1 - e.deltaY * 0.005; 
+        const clampedZoom = Math.max(0.1, Math.min(20, currentZoom * zoomFactor));
+
+        const newPanX = mouseX - (mouseX - currentPan.x) * (clampedZoom / currentZoom);
+        const newPanY = mouseY - (mouseY - currentPan.y) * (clampedZoom / currentZoom);
 
         setZoom(clampedZoom);
         setPan({ x: newPanX, y: newPanY });
+      } else {
+        // 2. Trackpad 2-finger panning (or mouse wheel scrolling)
+        // If Shift is pressed, map vertical wheel scrolls (deltaY) to horizontal panning
+        const dx = e.shiftKey ? e.deltaY : e.deltaX;
+        const dy = e.shiftKey ? 0 : e.deltaY;
+        setPan({
+          x: currentPan.x - dx,
+          y: currentPan.y - dy,
+        });
       }
-    },
-    [setPan, setZoom, viewportRef]
-  );
+    };
 
-  const handleTouchEnd = useCallback(() => {
-    touchStartRef.current = null;
-  }, []);
+    viewport.addEventListener("touchstart", onTouchStartDOM, { passive: false });
+    viewport.addEventListener("touchmove", onTouchMoveDOM, { passive: false });
+    viewport.addEventListener("touchend", onTouchEndDOM);
+    viewport.addEventListener("wheel", onWheelDOM, { passive: false });
+
+    return () => {
+      viewport.removeEventListener("touchstart", onTouchStartDOM);
+      viewport.removeEventListener("touchmove", onTouchMoveDOM);
+      viewport.removeEventListener("touchend", onTouchEndDOM);
+      viewport.removeEventListener("wheel", onWheelDOM);
+    };
+  }, [setPan, setZoom, setDraftShape, setRubberBandRect, viewportRef]);
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -582,10 +611,6 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onWheel={handleWheel}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
       onDragOver={handleDragOver}
       onDrop={handleDrop}

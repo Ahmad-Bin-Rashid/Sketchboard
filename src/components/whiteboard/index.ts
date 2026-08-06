@@ -18,3 +18,4 @@ export { ConnectionIndicator } from "./connection-indicator";
 export { RemoteCursors } from "./remote-cursors";
 export { CursorAvatar } from "./cursor-avatar";
 export { ActiveUsersPanel } from "./active-users-panel";
+export { ZoomIndicator } from "./zoom-indicator";
