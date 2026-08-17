@@ -4,6 +4,8 @@ import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
 import { RectangleShape } from "./rectangle-shape";
 import { EllipseShape } from "./ellipse-shape";
+import { LineShape } from "./line-shape";
+import { ArrowShape } from "./arrow-shape";
 import { DrawShape } from "./draw-shape";
 import { TextShape } from "./text-shape";
 import { StickyShape } from "./sticky-shape";
@@ -172,6 +174,10 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
         return <RectangleShape shape={shape} />;
       case "ellipse":
         return <EllipseShape shape={shape} />;
+      case "line":
+        return <LineShape shape={shape as any} />;
+      case "arrow":
+        return <ArrowShape shape={shape as any} />;
       case "draw":
         return <DrawShape shape={shape} />;
       case "text":

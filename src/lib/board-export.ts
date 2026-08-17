@@ -39,7 +39,7 @@ export interface ImportResult {
   error?: string;
 }
 
-const VALID_TYPES: ShapeType[] = ["rectangle", "ellipse", "draw", "text", "sticky", "image", "embed"];
+const VALID_TYPES: ShapeType[] = ["rectangle", "ellipse", "draw", "text", "sticky", "image", "embed", "line", "arrow"];
 
 // ─── Type Guard ──────────────────────────────────────────────────────────────
 
@@ -97,6 +97,15 @@ function isValidShape(s: unknown): s is CustomShape {
 
   if (shape.type === "embed") {
     return typeof shape.src === "string";
+  }
+
+  if (shape.type === "line" || shape.type === "arrow") {
+    return (
+      typeof shape.x1n === "number" &&
+      typeof shape.y1n === "number" &&
+      typeof shape.x2n === "number" &&
+      typeof shape.y2n === "number"
+    );
   }
 
   return true;
@@ -264,6 +273,40 @@ export function generateSVGString(shapes: CustomShape[]): string {
         return `<rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" rx="4" ry="4" opacity="${opacity}" />`;
       case "ellipse":
         return `<ellipse cx="${shape.x + shape.width / 2}" cy="${shape.y + shape.height / 2}" rx="${shape.width / 2}" ry="${shape.height / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" />`;
+      case "line": {
+        const x1 = shape.x + (shape.x1n ?? 0) * shape.width;
+        const y1 = shape.y + (shape.y1n ?? 0) * shape.height;
+        const x2 = shape.x + (shape.x2n ?? 0) * shape.width;
+        const y2 = shape.y + (shape.y2n ?? 0) * shape.height;
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linecap="round" />`;
+      }
+      case "arrow": {
+        const x1 = shape.x + (shape.x1n ?? 0) * shape.width;
+        const y1 = shape.y + (shape.y1n ?? 0) * shape.height;
+        const x2 = shape.x + (shape.x2n ?? 0) * shape.width;
+        const y2 = shape.y + (shape.y2n ?? 0) * shape.height;
+        
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const headSize = Math.max(10, shape.strokeWidth * 3);
+        const arrowX1 = x2 - headSize * Math.cos(angle - Math.PI / 6);
+        const arrowY1 = y2 - headSize * Math.sin(angle - Math.PI / 6);
+        const arrowX2 = x2 - headSize * Math.cos(angle + Math.PI / 6);
+        const arrowY2 = y2 - headSize * Math.sin(angle + Math.PI / 6);
+
+        return `
+          <g opacity="${opacity}">
+            <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" ${strokeDash} stroke-linecap="round" />
+            <path d="M ${x2} ${y2} L ${arrowX1} ${arrowY1} L ${arrowX2} ${arrowY2} Z" fill="${stroke}" stroke="${stroke}" stroke-width="1" stroke-linejoin="round" />
+          </g>
+        `;
+      }
       case "draw": {
         const relativePoints = shape.points.map(([px, py, pr]) => [
           px - shape.x,

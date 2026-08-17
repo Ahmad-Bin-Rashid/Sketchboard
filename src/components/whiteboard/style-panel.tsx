@@ -122,7 +122,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
             </div>
 
             {/* Fill Presets */}
-            {baseline.type !== "draw" && baseline.type !== "image" && baseline.type !== "embed" && (
+            {baseline.type !== "draw" && baseline.type !== "image" && baseline.type !== "embed" && baseline.type !== "line" && baseline.type !== "arrow" && (
               <div className="flex flex-col gap-1.5 pt-1">
                 <span className="text-[11px] text-foreground uppercase">Fill Mode</span>
                 <div className="flex items-center gap-1.5">
@@ -456,25 +456,25 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
               onClick={() => arrangeShapes(selectedShapeIds, "forward", shapesMap)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
-              <Layers className="h-3.5 w-3.5 rotate-180" /> Forward
+              Forward
             </button>
             <button
               onClick={() => arrangeShapes(selectedShapeIds, "backward", shapesMap)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
-              <Layers className="h-3.5 w-3.5" /> Backward
+              Backward
             </button>
             <button
               onClick={() => arrangeShapes(selectedShapeIds, "front", shapesMap)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
-              <Sparkles className="h-3.5 w-3.5" /> Front
+              Front
             </button>
             <button
               onClick={() => arrangeShapes(selectedShapeIds, "back", shapesMap)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
-              <Sparkles className="h-3.5 w-3.5 opacity-60" /> Back
+              Back
             </button>
           </div>
       </div>

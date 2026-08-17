@@ -155,6 +155,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         } else {
           const defaultFill = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_FILL : "transparent";
           const defaultStroke = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_STROKE : defaultStrokeColor;
+          const isLineOrArrow = activeTool === "line" || activeTool === "arrow";
           
           newShape = {
             id,
@@ -169,6 +170,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             opacity: 1.0,
             index,
             ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: SHAPE_DEFAULTS.FONT_SIZE, fontFamily: SHAPE_DEFAULTS.FONT_FAMILY } : {}),
+            ...(isLineOrArrow ? { x1n: 0, y1n: 0, x2n: 0, y2n: 0 } : {}),
           } as CustomShape;
         }
 
@@ -239,18 +241,49 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
               currentY = Math.round(currentY / SHAPE_DEFAULTS.GRID_SIZE) * SHAPE_DEFAULTS.GRID_SIZE;
             }
 
+            const isLineOrArrow = draftShape.type === "line" || draftShape.type === "arrow";
+
+            if (isLineOrArrow && e.shiftKey) {
+              const dx = currentX - startX;
+              const dy = currentY - startY;
+              const angle = Math.atan2(dy, dx);
+              const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+              const distance = Math.hypot(dx, dy);
+              currentX = startX + distance * Math.cos(snappedAngle);
+              currentY = startY + distance * Math.sin(snappedAngle);
+            }
+
             const x = Math.min(startX, currentX);
             const y = Math.min(startY, currentY);
             const width = Math.abs(currentX - startX);
             const height = Math.abs(currentY - startY);
 
-            setDraftShape({
-              ...draftShape,
-              x,
-              y,
-              width,
-              height,
-            });
+            if (isLineOrArrow) {
+              const x1n = width === 0 ? 0 : (startX - x) / width;
+              const y1n = height === 0 ? 0 : (startY - y) / height;
+              const x2n = width === 0 ? 0 : (currentX - x) / width;
+              const y2n = height === 0 ? 0 : (currentY - y) / height;
+
+              setDraftShape({
+                ...draftShape,
+                x,
+                y,
+                width,
+                height,
+                x1n,
+                y1n,
+                x2n,
+                y2n,
+              } as CustomShape);
+            } else {
+              setDraftShape({
+                ...draftShape,
+                x,
+                y,
+                width,
+                height,
+              });
+            }
           }
           e.stopPropagation();
         }
@@ -316,7 +349,12 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           }
         } else {
           // If shape has no size (single click-create), apply defaults for text/sticky
-          if (finalShape.width < 5 || finalShape.height < 5) {
+          const isLineOrArrow = finalShape.type === "line" || finalShape.type === "arrow";
+          const tooSmall = isLineOrArrow
+            ? Math.hypot(finalShape.width, finalShape.height) < 5
+            : (finalShape.width < 5 || finalShape.height < 5);
+
+          if (tooSmall) {
             if (finalShape.type === "text" || finalShape.type === "sticky") {
               finalShape.width = SHAPE_DEFAULTS.DEFAULT_TEXT_WIDTH;
               finalShape.height = finalShape.type === "text" ? SHAPE_DEFAULTS.DEFAULT_TEXT_HEIGHT : SHAPE_DEFAULTS.DEFAULT_STICKY_HEIGHT;
