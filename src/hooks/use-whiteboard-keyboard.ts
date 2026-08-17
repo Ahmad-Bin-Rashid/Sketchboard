@@ -29,6 +29,7 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         setSelectedShapeIds,
         clearSelection,
         setActiveTool,
+        activeTool,
       } = useWhiteboardStore.getState();
 
       const isMac =
@@ -58,10 +59,10 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         setSelectedShapeIds(Object.keys(shapes));
       }
 
-      // 5. Tool Selection Shortcuts (V, R, O, D, T, S, L, A)
+      // 5. Tool Selection Shortcuts (S, R, O, D, T, N, L, A, H)
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const key = e.key.toLowerCase();
-        if (key === "v") {
+        if (key === "s") {
           e.preventDefault();
           setActiveTool("select");
         } else if (key === "r") {
@@ -76,7 +77,7 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         } else if (key === "t") {
           e.preventDefault();
           setActiveTool("text");
-        } else if (key === "s") {
+        } else if (key === "n") {
           e.preventDefault();
           setActiveTool("sticky");
         } else if (key === "l") {
@@ -85,6 +86,9 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         } else if (key === "a") {
           e.preventDefault();
           setActiveTool("arrow");
+        } else if (key === "h") {
+          e.preventDefault();
+          setActiveTool(activeTool === "hand" ? "select" : "hand");
         }
       }
 

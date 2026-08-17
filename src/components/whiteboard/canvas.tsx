@@ -44,7 +44,6 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
 
   console.log("[Canvas] Rendered. Zoom:", zoom, "Pan:", pan);
 
-  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -57,48 +56,16 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
     midpoint: { x: number; y: number };
   } | null>(null);
 
-  // Monitor Spacebar key state globally for panning mode toggles
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLTextAreaElement ||
-        (active instanceof HTMLElement && active.isContentEditable)
-      ) {
-        return;
-      }
-      if (e.code === "Space") {
-        e.preventDefault();
-        setIsSpacePressed(true);
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        setIsSpacePressed(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
-
   // Pointer Down handler
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!viewportRef.current) return;
 
       const isMiddleClick = e.button === 1;
-      const isSpacePan = e.button === 0 && isSpacePressed;
+      const isHandPan = e.button === 0 && activeTool === "hand";
 
       // 1. Check if panning is triggered
-      if (isMiddleClick || isSpacePan) {
+      if (isMiddleClick || isHandPan) {
         setIsPanning(true);
         panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -179,7 +146,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         e.stopPropagation();
       }
     },
-    [activeTool, isSpacePressed, pan, zoom, shapes, setDraftShape, setSelectedShapeIds, viewportRef]
+    [activeTool, pan, zoom, shapes, setDraftShape, setSelectedShapeIds, viewportRef]
   );
 
   // Pointer Move handler
@@ -603,7 +570,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       className="canvas-viewport relative h-full w-full overflow-hidden select-none"
       style={{
         touchAction: "none",
-        cursor: isPanning ? "grabbing" : isSpacePressed ? "grab" : "default",
+        cursor: isPanning ? "grabbing" : activeTool === "hand" ? "grab" : "default",
         background: "var(--background)",
       }}
       onPointerDown={handlePointerDown}

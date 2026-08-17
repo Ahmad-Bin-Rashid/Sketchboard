@@ -11,6 +11,7 @@ import {
   Type,
   Minus,
   ArrowRight,
+  Hand,
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape, ToolType } from "@/types/whiteboard";
@@ -28,14 +29,15 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
   };
 
   const tools = [
-    { type: "select" as ToolType, icon: MousePointer, label: "Select (V)" },
+    { type: "select" as ToolType, icon: MousePointer, label: "Select (S)" },
+    { type: "hand" as ToolType, icon: Hand, label: "Hand (H)" },
+    { type: "draw" as ToolType, icon: Pencil, label: "Pencil (D)" },
     { type: "line" as ToolType, icon: Minus, label: "Line (L)" },
     { type: "arrow" as ToolType, icon: ArrowRight, label: "Arrow (A)" },
-    { type: "draw" as ToolType, icon: Pencil, label: "Pencil (D)" },
     { type: "rectangle" as ToolType, icon: Square, label: "Rectangle (R)" },
     { type: "ellipse" as ToolType, icon: Circle, label: "Ellipse (O)" },
     { type: "text" as ToolType, icon: Type, label: "Text (T)" },
-    { type: "sticky" as ToolType, icon: StickyNote, label: "Sticky Note (S)" },
+    { type: "sticky" as ToolType, icon: StickyNote, label: "Sticky Note (N)" },
   ];
 
   return (
