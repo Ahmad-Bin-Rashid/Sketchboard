@@ -1,57 +1,57 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useLayoutEffect, useEffect } from "react";
 import type { TextShape as TextShapeType } from "@/types/whiteboard";
-import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
 
 interface TextShapeProps {
   shape: TextShapeType;
   onUpdate: (id: string, updates: Partial<TextShapeType>) => void;
   isReadOnly?: boolean;
+  isEditing?: boolean;
+  onEditEnd?: () => void;
 }
 
-export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProps) {
-  const [isEditing, setIsEditing] = useState(false);
+export function TextShape({
+  shape,
+  onUpdate,
+  isReadOnly = false,
+  isEditing = false,
+  onEditEnd,
+}: TextShapeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
 
+  // Auto-focus and select all text when editing is enabled
   useEffect(() => {
     if (isEditing && textareaRef.current) {
-      const textarea = textareaRef.current;
-      textarea.focus();
-      textarea.select();
-      textarea.style.height = "0px";
-      const newHeight = Math.max(40, textarea.scrollHeight);
-      textarea.style.height = `${newHeight}px`;
+      textareaRef.current.focus();
+      textareaRef.current.select();
     }
   }, [isEditing]);
 
-  // Auto-enter edit mode if the shape is selected and empty (e.g. just created)
-  const { selectedShapeIds } = useWhiteboardStore();
-  const isSelected = selectedShapeIds.includes(shape.id);
+  // Reactive dynamic measuring and updating of shape dimensions
+  useLayoutEffect(() => {
+    if (isEditing && measureRef.current) {
+      // Get exact text scroll width and height
+      // Add small horizontal (24px) and vertical (12px) padding to accommodate cursors and lines
+      const width = Math.max(64, measureRef.current.scrollWidth + 24);
+      const height = Math.max(shape.fontSize * 1.2, measureRef.current.scrollHeight + 12);
 
-  useEffect(() => {
-    if (isSelected && shape.text === "" && !isReadOnly) {
-      setIsEditing(true);
+      const widthDiff = Math.abs(width - (shape.width || 0));
+      const heightDiff = Math.abs(height - (shape.height || 0));
+
+      if (widthDiff > 2 || heightDiff > 2) {
+        onUpdate(shape.id, { width, height });
+      }
     }
-  }, [isSelected, shape.text, isReadOnly]);
-
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (isReadOnly) return;
-    e.stopPropagation();
-    setIsEditing(true);
-  };
+  }, [shape.text, shape.fontSize, shape.fontFamily, isEditing, shape.width, shape.height, onUpdate, shape.id]);
 
   const handleBlur = () => {
-    setIsEditing(false);
+    onEditEnd?.();
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
-    const textarea = e.target;
-    textarea.style.height = "0px";
-    const newHeight = Math.max(40, textarea.scrollHeight);
-    textarea.style.height = `${newHeight}px`;
-
-    onUpdate(shape.id, { text, height: newHeight });
+    onUpdate(shape.id, { text });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -70,41 +70,70 @@ export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProp
 
   if (isEditing) {
     return (
-      <textarea
-        ref={textareaRef}
-        value={shape.text}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        onPointerDown={(e) => e.stopPropagation()} // Prevent drag-selection/pan on input
-        className="w-full h-full bg-transparent border-none outline-none resize-none overflow-hidden p-0 break-words select-text pointer-events-auto"
-        style={{
-          color: shape.stroke || "var(--foreground)",
-          fontSize: `${shape.fontSize ?? 16}px`,
-          fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
-          fontWeight: shape.fontWeight || 'normal',
-          fontStyle: shape.fontStyle || 'normal',
-          textDecoration: shape.textDecoration || 'none',
-          textAlign: shape.textAlign || 'left',
-          lineHeight: "1.2",
-        }}
-      />
+      <div className="relative w-full h-full">
+        {/* Hidden mirror element to calculate text bounding box */}
+        <span
+          ref={measureRef}
+          className="absolute pointer-events-none invisible whitespace-pre-wrap break-words"
+          style={{
+            fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
+            fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
+            fontWeight: shape.fontWeight || "normal",
+            fontStyle: shape.fontStyle || "normal",
+            textDecoration: shape.textDecoration || "none",
+            lineHeight: "1.2",
+            width: "max-content",
+            maxWidth: "600px",
+          }}
+        >
+          {shape.text ? (shape.text.endsWith("\n") ? shape.text + " " : shape.text) : " "}
+        </span>
+
+        <textarea
+          ref={textareaRef}
+          value={shape.text}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          onPointerDown={(e) => e.stopPropagation()} // Prevent drag-selection/pan on input
+          className="w-full h-full bg-transparent resize-none overflow-hidden p-0 break-words select-text pointer-events-auto"
+          style={{
+            color: shape.stroke || "var(--foreground)",
+            fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
+            fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
+            fontWeight: shape.fontWeight || "normal",
+            fontStyle: shape.fontStyle || "normal",
+            textDecoration: shape.textDecoration || "none",
+            textAlign: shape.textAlign || "left",
+            lineHeight: "1.2",
+            border: "none",
+            outline: "none",
+            boxShadow: "none",
+            padding: 0,
+            margin: 0,
+          }}
+        />
+      </div>
     );
   }
 
   return (
     <div
-      onDoubleClick={handleDoubleClick}
       className="w-full h-full select-none break-words whitespace-pre-wrap flex items-start"
       style={{
         color: shape.stroke || "var(--foreground)",
-        fontSize: `${shape.fontSize ?? 16}px`,
+        fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
         fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
-        fontWeight: shape.fontWeight || 'normal',
-        fontStyle: shape.fontStyle || 'normal',
-        textDecoration: shape.textDecoration || 'none',
-        textAlign: shape.textAlign || 'left',
-        justifyContent: shape.textAlign === 'center' ? 'center' : shape.textAlign === 'right' ? 'flex-end' : 'flex-start',
+        fontWeight: shape.fontWeight || "normal",
+        fontStyle: shape.fontStyle || "normal",
+        textDecoration: shape.textDecoration || "none",
+        textAlign: shape.textAlign || "left",
+        justifyContent:
+          shape.textAlign === "center"
+            ? "center"
+            : shape.textAlign === "right"
+            ? "flex-end"
+            : "flex-start",
         lineHeight: "1.2",
       }}
     >

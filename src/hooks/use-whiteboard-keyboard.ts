@@ -1,13 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
 import { deleteShapes } from "@/lib/board-actions";
 
 export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
-  useEffect(() => {
-    if (!shapesMap) return;
+  const shapesMapRef = useRef<Y.Map<CustomShape> | null>(shapesMap);
 
+  useEffect(() => {
+    shapesMapRef.current = shapesMap;
+  }, [shapesMap]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Guard: do not trigger when user is typing in input or textareas
       if (
@@ -34,9 +38,9 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
 
       // 1. Delete / Backspace
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedShapeIds.length > 0) {
+        if (selectedShapeIds.length > 0 && shapesMapRef.current) {
           e.preventDefault();
-          deleteShapes(selectedShapeIds, shapesMap);
+          deleteShapes(selectedShapeIds, shapesMapRef.current);
           setSelectedShapeIds([]);
         }
       }
@@ -81,7 +85,8 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
       // 4. Arrow keys (Nudge selected shapes)
       if (
         ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) &&
-        selectedShapeIds.length > 0
+        selectedShapeIds.length > 0 &&
+        shapesMapRef.current
       ) {
         e.preventDefault();
         const nudgeAmount = e.shiftKey ? 10 : 1;
@@ -93,11 +98,12 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         if (e.key === "ArrowUp") dy = -nudgeAmount;
         if (e.key === "ArrowDown") dy = nudgeAmount;
 
-        const doc = shapesMap.doc;
+        const currentMap = shapesMapRef.current;
+        const doc = currentMap.doc;
         if (doc) {
           doc.transact(() => {
             selectedShapeIds.forEach((id) => {
-              const current = shapesMap.get(id);
+              const current = currentMap.get(id);
               if (current) {
                 const updated = {
                   ...current,
@@ -113,7 +119,7 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
                   ]);
                 }
 
-                shapesMap.set(id, updated);
+                currentMap.set(id, updated);
               }
             });
           });
@@ -123,5 +129,5 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [shapesMap]);
+  }, []);
 }

@@ -32,9 +32,33 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     }
   };
 
+  const [isEditing, setIsEditing] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const startPointerRef = React.useRef({ x: 0, y: 0 });
   const startShapesRef = React.useRef<Record<string, CustomShape>>({});
+  const isAlreadySelectedRef = React.useRef(false);
+
+  // Auto-enter edit mode if the shape is selected and empty (e.g. just created)
+  React.useEffect(() => {
+    if (isSelected && (shape.type === "text" || shape.type === "sticky") && (shape as any).text === "") {
+      setIsEditing(true);
+    }
+  }, [isSelected, (shape as any).text, shape.type]);
+
+  // Cancel editing when deselected
+  React.useEffect(() => {
+    if (!isSelected) {
+      setIsEditing(false);
+    }
+  }, [isSelected]);
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isDraft || activeTool !== "select") return;
+    if (shape.type === "text" || shape.type === "sticky") {
+      e.stopPropagation();
+      setIsEditing(true);
+    }
+  };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isDraft || activeTool !== "select") return;
@@ -44,6 +68,7 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     e.currentTarget.setPointerCapture(e.pointerId);
 
     const isAlreadySelected = selectedShapeIds.includes(shape.id);
+    isAlreadySelectedRef.current = isAlreadySelected;
     let currentSelection = selectedShapeIds;
 
     if (e.shiftKey) {
@@ -130,6 +155,15 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     e.stopPropagation();
     e.currentTarget.releasePointerCapture(e.pointerId);
     setIsDragging(false);
+
+    // Reselection click triggers editing (if clicked without significant dragging)
+    const dx = e.clientX - startPointerRef.current.x;
+    const dy = e.clientY - startPointerRef.current.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < 3 && isAlreadySelectedRef.current && (shape.type === "text" || shape.type === "sticky")) {
+      setIsEditing(true);
+    }
   };
 
   const renderShape = () => {
@@ -146,6 +180,8 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
             shape={shape}
             onUpdate={handleUpdate}
             isReadOnly={isDraft}
+            isEditing={isEditing}
+            onEditEnd={() => setIsEditing(false)}
           />
         );
       case "sticky":
@@ -154,6 +190,8 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
             shape={shape}
             onUpdate={handleUpdate}
             isReadOnly={isDraft}
+            isEditing={isEditing}
+            onEditEnd={() => setIsEditing(false)}
           />
         );
       case "image":
@@ -194,6 +232,7 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onDoubleClick={handleDoubleClick}
     >
       {renderShape()}
     </div>

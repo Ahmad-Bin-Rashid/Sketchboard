@@ -165,10 +165,10 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             height: 0,
             fill: defaultFill,
             stroke: defaultStroke,
-            strokeWidth: 2,
+            strokeWidth: activeTool === "sticky" ? 1 : 2,
             opacity: 1.0,
             index,
-            ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: 16, fontFamily: SHAPE_DEFAULTS.FONT_FAMILY } : {}),
+            ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: SHAPE_DEFAULTS.FONT_SIZE, fontFamily: SHAPE_DEFAULTS.FONT_FAMILY } : {}),
           } as CustomShape;
         }
 
@@ -500,7 +500,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           opacity: 1.0,
           index,
           text: "",
-          fontSize: 16,
+          fontSize: SHAPE_DEFAULTS.FONT_SIZE,
           fontFamily: SHAPE_DEFAULTS.FONT_FAMILY,
         };
 
