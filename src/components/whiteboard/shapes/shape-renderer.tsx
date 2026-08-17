@@ -187,6 +187,9 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
         zIndex: isSelected ? 1000 : undefined,
         // Block interaction if not in select mode (pointer events should go to canvas for shape creation)
         pointerEvents: activeTool === "select" && !isDraft ? "auto" : "none",
+        filter: shape.shadow
+          ? `drop-shadow(0px ${shape.shadowSpread ?? 4}px ${shape.shadowBlur ?? 8}px rgba(0, 0, 0, 0.15))`
+          : undefined,
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

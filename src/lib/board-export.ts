@@ -18,6 +18,8 @@
 
 import type { CustomShape, ShapeType } from "@/types/whiteboard";
 import getStroke from "perfect-freehand";
+import { SHAPE_DEFAULTS } from "@/lib/constants";
+
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -283,18 +285,18 @@ export function generateSVGString(shapes: CustomShape[]): string {
       }
       case "text": {
         const lines = shape.text.split("\n");
-        const fontSize = shape.fontSize ?? 16;
-        const fontFamily = shape.fontFamily || "sans-serif";
+        const fontSize = shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE;
+        const fontFamily = shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY;
         const tspans = lines
           .map((line, idx) => `<tspan x="${shape.x}" dy="${idx === 0 ? 0 : "1.2em"}">${escapeHtml(line)}</tspan>`)
           .join("");
         return `<text x="${shape.x}" y="${shape.y + fontSize}" font-family="${fontFamily}" font-size="${fontSize}" fill="${stroke || "#000"}" opacity="${opacity}">${tspans}</text>`;
       }
       case "sticky": {
-        const stickyBg = shape.fill === "transparent" ? "#fef9c3" : shape.fill || "#fef9c3";
-        const stickyText = shape.stroke === "transparent" ? "#1e293b" : shape.stroke || "#1e293b";
+        const stickyBg = shape.fill === "transparent" ? SHAPE_DEFAULTS.STICKY_FILL : shape.fill || SHAPE_DEFAULTS.STICKY_FILL;
+        const stickyText = shape.stroke === "transparent" ? SHAPE_DEFAULTS.STICKY_STROKE : shape.stroke || SHAPE_DEFAULTS.STICKY_STROKE;
         const lines = shape.text.split("\n");
-        const fontSize = shape.fontSize ?? 14;
+        const fontSize = shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE;
         const textYStart = shape.y + (shape.height - (lines.length * fontSize * 1.4)) / 2 + fontSize;
         const tspans = lines
           .map((line, idx) => `<tspan x="${shape.x + shape.width / 2}" dy="${idx === 0 ? 0 : "1.4em"}">${escapeHtml(line)}</tspan>`)
@@ -302,7 +304,7 @@ export function generateSVGString(shapes: CustomShape[]): string {
         return `
           <g opacity="${opacity}">
             <rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="${stickyBg}" rx="8" ry="8" />
-            <text x="${shape.x + shape.width / 2}" y="${textYStart}" font-family="sans-serif" font-size="${fontSize}" fill="${stickyText}" text-anchor="middle">${tspans}</text>
+            <text x="${shape.x + shape.width / 2}" y="${textYStart}" font-family="${shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY}" font-size="${fontSize}" fill="${stickyText}" text-anchor="middle">${tspans}</text>
           </g>
         `;
       }

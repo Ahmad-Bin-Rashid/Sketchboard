@@ -11,6 +11,7 @@ import { nanoid } from "nanoid";
 import { generateNewTopIndex } from "@/lib/fractional-index";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
 import { addImageShapes } from "@/lib/board-actions";
+import { useTheme } from "@/components/theme-provider";
 
 
 
@@ -37,6 +38,9 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
     setRubberBandRect,
     showGrid,
   } = useWhiteboardStore();
+
+  const { resolvedTheme } = useTheme();
+  const defaultStrokeColor = resolvedTheme === "dark" ? "#ffffff" : "#1c1917";
 
   console.log("[Canvas] Rendered. Zoom:", zoom, "Pan:", pan);
 
@@ -142,7 +146,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             width: 0,
             height: 0,
             fill: "transparent",
-            stroke: SHAPE_DEFAULTS.STROKE, // default Stone color
+            stroke: defaultStrokeColor, // default theme color
             strokeWidth: 4,
             opacity: 1.0,
             index,
@@ -150,7 +154,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           };
         } else {
           const defaultFill = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_FILL : "transparent";
-          const defaultStroke = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_STROKE : SHAPE_DEFAULTS.STROKE;
+          const defaultStroke = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_STROKE : defaultStrokeColor;
           
           newShape = {
             id,
@@ -164,8 +168,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             strokeWidth: 2,
             opacity: 1.0,
             index,
-            ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: 16 } : {}),
-            ...(activeTool === "text" ? { fontFamily: "sans-serif" } : {}),
+            ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: 16, fontFamily: SHAPE_DEFAULTS.FONT_FAMILY } : {}),
           } as CustomShape;
         }
 
@@ -492,13 +495,13 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           width: SHAPE_DEFAULTS.DEFAULT_TEXT_WIDTH,
           height: SHAPE_DEFAULTS.DEFAULT_TEXT_HEIGHT,
           fill: "transparent",
-          stroke: SHAPE_DEFAULTS.STROKE, // default Stone
+          stroke: defaultStrokeColor, // default theme color
           strokeWidth: 2,
           opacity: 1.0,
           index,
           text: "",
           fontSize: 16,
-          fontFamily: "sans-serif",
+          fontFamily: SHAPE_DEFAULTS.FONT_FAMILY,
         };
 
         const doc = shapesMap.doc;

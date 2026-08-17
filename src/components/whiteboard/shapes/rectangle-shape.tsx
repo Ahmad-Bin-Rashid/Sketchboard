@@ -10,9 +10,9 @@ export function RectangleShape({ shape }: RectangleShapeProps) {
     <div
       className="w-full h-full pointer-events-none"
       style={{
-        border: `${shape.strokeWidth}px solid ${shape.stroke}`,
+        border: `${shape.strokeWidth}px ${shape.strokeStyle || "solid"} ${shape.stroke}`,
         backgroundColor: shape.fill,
-        borderRadius: "4px",
+        borderRadius: `${shape.borderRadius ?? 4}px`,
       }}
     />
   );

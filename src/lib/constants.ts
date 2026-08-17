@@ -120,5 +120,31 @@ export const SHAPE_DEFAULTS = {
   DEFAULT_TEXT_HEIGHT: 40,
   DEFAULT_STICKY_HEIGHT: 120,
   DEFAULT_IMAGE_SIZE: 200,
+  FONT_SIZE: 20,
+  FONT_FAMILY: '"Shantell Sans", cursive',
+  BORDER_RADIUS: 4,
+  SHADOW_BLUR: 8,
+  SHADOW_SPREAD: 4,
 } as const;
+
+export const PRESET_COLORS = [
+  // Row 1: Blacks/Whites
+  "#ffffff", "#e7e5e4", "#78716c", "#1c1917",
+  // Row 2: Reds/Pinks
+  "#fca5a5", "#ef4444", "#b91c1c", "#ec4899",
+  // Row 3: Oranges/Yellows
+  "#fed7aa", "#f97316", "#f59e0b", "#eab308",
+  // Row 4: Greens
+  "#84cc16", "#829c87", "#15803d", "#0d9488",
+  // Row 5: Blues/Purples
+  "#38bdf8", "#2563eb", "#4f46e5", "#7c3aed",
+] as const;
+
+export const FONT_FAMILIES = [
+  { name: "Handwriting", value: '"Shantell Sans", cursive' },
+  { name: "Sans Serif", value: '"Inter", sans-serif' },
+  { name: "Serif", value: 'Georgia, serif' },
+  { name: "Monospace", value: '"JetBrains Mono", monospace' },
+] as const;
+
 

@@ -13,10 +13,16 @@ export interface BaseShape {
   strokeWidth: number;
   opacity: number;
   index: string; // Lexical fractional ordering string for z-index layering
+  strokeStyle?: 'solid' | 'dashed' | 'dotted';
+  shadow?: boolean;
+  shadowBlur?: number;
+  shadowSpread?: number;
+  shadowColor?: string;
 }
 
 export interface RectShape extends BaseShape {
   type: "rectangle";
+  borderRadius?: number;
 }
 
 export interface EllipseShape extends BaseShape {
@@ -32,13 +38,22 @@ export interface TextShape extends BaseShape {
   type: "text";
   text: string;
   fontSize: number;
-  fontFamily: string;
+  fontFamily?: string;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'none' | 'underline';
+  textAlign?: 'left' | 'center' | 'right';
 }
 
 export interface StickyShape extends BaseShape {
   type: "sticky";
   text: string;
   fontSize: number;
+  fontFamily?: string;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'none' | 'underline';
+  textAlign?: 'left' | 'center' | 'right';
 }
 
 export interface ImageShape extends BaseShape {

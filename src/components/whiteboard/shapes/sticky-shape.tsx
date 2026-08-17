@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { StickyShape as StickyShapeType } from "@/types/whiteboard";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { SHAPE_DEFAULTS } from "@/lib/constants";
 
 interface StickyShapeProps {
   shape: StickyShapeType;
@@ -72,18 +73,29 @@ export function StickyShape({ shape, onUpdate, isReadOnly = false }: StickyShape
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           onPointerDown={(e) => e.stopPropagation()} // Prevent canvas deselect/drag
-          className="w-full h-full bg-transparent border-none outline-none resize-none overflow-y-auto p-0 font-sans text-center break-words select-text pointer-events-auto"
+          className="w-full h-full bg-transparent border-none outline-none resize-none overflow-y-auto p-0 break-words select-text pointer-events-auto"
           style={{
             fontSize: `${shape.fontSize ?? 14}px`,
+            fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
+            fontWeight: shape.fontWeight || 'normal',
+            fontStyle: shape.fontStyle || 'normal',
+            textDecoration: shape.textDecoration || 'none',
+            textAlign: shape.textAlign || 'center',
             lineHeight: "1.4",
             color: textColor,
           }}
         />
       ) : (
         <div
-          className="w-full h-full flex items-center justify-center font-sans text-center break-words overflow-hidden whitespace-pre-wrap"
+          className="w-full h-full flex items-center justify-center break-words overflow-hidden whitespace-pre-wrap"
           style={{
             fontSize: `${shape.fontSize ?? 14}px`,
+            fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
+            fontWeight: shape.fontWeight || 'normal',
+            fontStyle: shape.fontStyle || 'normal',
+            textDecoration: shape.textDecoration || 'none',
+            textAlign: shape.textAlign || 'center',
+            justifyContent: shape.textAlign === 'left' ? 'flex-start' : shape.textAlign === 'right' ? 'flex-end' : 'center',
             lineHeight: "1.4",
           }}
         >

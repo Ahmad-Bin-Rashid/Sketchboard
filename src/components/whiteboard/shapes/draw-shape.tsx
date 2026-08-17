@@ -34,6 +34,39 @@ export function DrawShape({ shape }: DrawShapeProps) {
     return `${d} Z`;
   }, [stroke]);
 
+  const isCustomStroke = shape.strokeStyle && shape.strokeStyle !== "solid";
+
+  const linePathData = useMemo(() => {
+    if (!relativePoints.length) return "";
+    return relativePoints.reduce((acc, [x, y], i) => {
+      if (i === 0) return `M ${x} ${y}`;
+      return `${acc} L ${x} ${y}`;
+    }, "");
+  }, [relativePoints]);
+
+  if (isCustomStroke) {
+    let strokeDasharray = "none";
+    if (shape.strokeStyle === "dashed") {
+      strokeDasharray = `${shape.strokeWidth * 3} ${shape.strokeWidth * 2}`;
+    } else if (shape.strokeStyle === "dotted") {
+      strokeDasharray = `${shape.strokeWidth} ${shape.strokeWidth * 2}`;
+    }
+
+    return (
+      <svg className="w-full h-full overflow-visible pointer-events-none absolute inset-0">
+        <path
+          d={linePathData}
+          fill="none"
+          stroke={shape.stroke || "#000"}
+          strokeWidth={shape.strokeWidth}
+          strokeDasharray={strokeDasharray}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg className="w-full h-full overflow-visible pointer-events-none absolute inset-0">
       <path

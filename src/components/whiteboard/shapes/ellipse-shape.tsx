@@ -10,7 +10,7 @@ export function EllipseShape({ shape }: EllipseShapeProps) {
     <div
       className="w-full h-full pointer-events-none"
       style={{
-        border: `${shape.strokeWidth}px solid ${shape.stroke}`,
+        border: `${shape.strokeWidth}px ${shape.strokeStyle || "solid"} ${shape.stroke}`,
         backgroundColor: shape.fill,
         borderRadius: "50%",
       }}

@@ -39,6 +39,7 @@ import { generateNewTopIndex } from "@/lib/fractional-index";
 import { nanoid } from "nanoid";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
 import { EmbedDialog } from "./embed-dialog";
+import { useTheme } from "@/components/theme-provider";
 
 interface CommandBarProps {
   shapesMap: Y.Map<CustomShape> | null;
@@ -80,7 +81,7 @@ export function CommandBar({
 
   const [activeDropdown, setActiveDropdown] = useState<"export" | "board" | "arrange" | "align" | null>(null);
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
   const barRef = useRef<HTMLDivElement>(null);
@@ -96,23 +97,8 @@ export function CommandBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Sync theme status on mount
-  useEffect(() => {
-    const isDark = document.documentElement.classList.contains("dark");
-    setTheme(isDark ? "dark" : "light");
-  }, []);
-
   const toggleTheme = () => {
-    const nextTheme = theme === "light" ? "dark" : "light";
-    setTheme(nextTheme);
-    localStorage.setItem("sketchboard-theme", nextTheme);
-    if (nextTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.setAttribute("data-theme", "light");
-    }
+    setTheme(resolvedTheme === "light" ? "dark" : "light");
   };
 
   const handleDuplicate = () => {
@@ -496,7 +482,7 @@ export function CommandBar({
                 className="flex items-center justify-between w-full text-left px-2.5 py-1.5 text-xs rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  {theme === "light" ? <Sun className="h-3.5 w-3.5 text-muted-foreground" /> : <Moon className="h-3.5 w-3.5 text-muted-foreground" />}
+                  {resolvedTheme === "light" ? <Sun className="h-3.5 w-3.5 text-muted-foreground" /> : <Moon className="h-3.5 w-3.5 text-muted-foreground" />}
                   Theme
                 </span>
                 <span className="text-[10px] text-muted-foreground font-semibold capitalize">

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { TextShape as TextShapeType } from "@/types/whiteboard";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { SHAPE_DEFAULTS } from "@/lib/constants";
 
 interface TextShapeProps {
   shape: TextShapeType;
@@ -76,11 +77,15 @@ export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProp
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         onPointerDown={(e) => e.stopPropagation()} // Prevent drag-selection/pan on input
-        className="w-full h-full bg-transparent border-none outline-none resize-none overflow-hidden p-0 font-sans break-words select-text pointer-events-auto"
+        className="w-full h-full bg-transparent border-none outline-none resize-none overflow-hidden p-0 break-words select-text pointer-events-auto"
         style={{
           color: shape.stroke || "var(--foreground)",
           fontSize: `${shape.fontSize ?? 16}px`,
-          fontFamily: shape.fontFamily || "sans-serif",
+          fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
+          fontWeight: shape.fontWeight || 'normal',
+          fontStyle: shape.fontStyle || 'normal',
+          textDecoration: shape.textDecoration || 'none',
+          textAlign: shape.textAlign || 'left',
           lineHeight: "1.2",
         }}
       />
@@ -90,11 +95,16 @@ export function TextShape({ shape, onUpdate, isReadOnly = false }: TextShapeProp
   return (
     <div
       onDoubleClick={handleDoubleClick}
-      className="w-full h-full select-none font-sans break-words whitespace-pre-wrap flex items-start"
+      className="w-full h-full select-none break-words whitespace-pre-wrap flex items-start"
       style={{
         color: shape.stroke || "var(--foreground)",
         fontSize: `${shape.fontSize ?? 16}px`,
-        fontFamily: shape.fontFamily || "sans-serif",
+        fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
+        fontWeight: shape.fontWeight || 'normal',
+        fontStyle: shape.fontStyle || 'normal',
+        textDecoration: shape.textDecoration || 'none',
+        textAlign: shape.textAlign || 'left',
+        justifyContent: shape.textAlign === 'center' ? 'center' : shape.textAlign === 'right' ? 'flex-end' : 'flex-start',
         lineHeight: "1.2",
       }}
     >

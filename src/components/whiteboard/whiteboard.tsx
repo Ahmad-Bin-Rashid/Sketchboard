@@ -37,7 +37,9 @@ import { UploadToastManager, type ToastEntry } from "./upload-toast";
 import { Canvas } from "./canvas";
 import { Toolbar } from "./toolbar";
 import { CommandBar } from "./command-bar";
+import { StylePanel } from "./style-panel";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { useTheme } from "@/components/theme-provider";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -177,6 +179,62 @@ export function Whiteboard({
     boardName,
   });
 
+  const { resolvedTheme } = useTheme();
+  const prevThemeRef = useRef<"light" | "dark" | null>(null);
+
+  useEffect(() => {
+    if (!shapesMap) {
+      // While shapesMap is loading, keep updating the ref to the current theme
+      // to avoid triggering initial-load conversions on synchronization.
+      prevThemeRef.current = resolvedTheme;
+      return;
+    }
+
+    const prevTheme = prevThemeRef.current;
+    if (prevTheme !== null && prevTheme !== resolvedTheme) {
+      const doc = shapesMap.doc;
+      if (doc) {
+        doc.transact(() => {
+          shapesMap.forEach((shape, id) => {
+            let updated = false;
+            const nextShape = { ...shape };
+            
+            // Convert stroke color
+            if (resolvedTheme === "dark") {
+              if (shape.stroke === "#1c1917" || shape.stroke === "#000000" || shape.stroke === "black") {
+                nextShape.stroke = "#ffffff";
+                updated = true;
+              }
+            } else {
+              if (shape.stroke === "#ffffff" || shape.stroke === "white" || shape.stroke === "#fff") {
+                nextShape.stroke = "#1c1917";
+                updated = true;
+              }
+            }
+
+            // Convert fill color
+            if (resolvedTheme === "dark") {
+              if (shape.fill === "#1c1917" || shape.fill === "#000000" || shape.fill === "black") {
+                nextShape.fill = "#ffffff";
+                updated = true;
+              }
+            } else {
+              if (shape.fill === "#ffffff" || shape.fill === "white" || shape.fill === "#fff") {
+                nextShape.fill = "#1c1917";
+                updated = true;
+              }
+            }
+
+            if (updated) {
+              shapesMap.set(id, nextShape);
+            }
+          });
+        });
+      }
+    }
+    prevThemeRef.current = resolvedTheme;
+  }, [resolvedTheme, shapesMap]);
+
   // Keyboard Shortcuts Hook
   useWhiteboardKeyboard(shapesMap);
   const undoRedoState = useUndoRedo(undoManager);
@@ -284,6 +342,9 @@ export function Whiteboard({
 
       {/* Main floating pill toolbar */}
       {!focusMode && <Toolbar shapesMap={shapesMap} />}
+
+      {/* Right-side style panel */}
+      {!focusMode && <StylePanel shapesMap={shapesMap} />}
 
       {/* Upload progress toasts — bottom-right, above toolbar */}
       <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />
