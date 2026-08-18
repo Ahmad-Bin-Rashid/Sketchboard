@@ -78,7 +78,7 @@ export function StickyShape({
           {/* Hidden mirror element to calculate text bounding box */}
           <span
             ref={measureRef}
-            className="absolute pointer-events-none invisible whitespace-pre-wrap break-words"
+            className="absolute pointer-events-none invisible whitespace-pre-wrap wrap-break-word"
             style={{
               fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
               fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
@@ -100,7 +100,7 @@ export function StickyShape({
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             onPointerDown={(e) => e.stopPropagation()} // Prevent canvas deselect/drag
-            className="w-full h-full bg-transparent resize-none overflow-hidden p-0 break-words select-text pointer-events-auto"
+            className="w-full h-full bg-transparent resize-none overflow-hidden p-0 wrap-break-word select-text pointer-events-auto"
             style={{
               fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
               fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
@@ -120,7 +120,7 @@ export function StickyShape({
         </div>
       ) : (
         <div
-          className="w-full h-full flex items-center justify-center break-words overflow-hidden whitespace-pre-wrap"
+          className="w-full h-full flex items-center justify-center wrap-break-word overflow-hidden whitespace-pre-wrap"
           style={{
             fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
             fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,

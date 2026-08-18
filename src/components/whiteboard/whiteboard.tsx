@@ -351,7 +351,7 @@ export function Whiteboard({
 
       {/* Connection and Zoom indicators — bottom-left */}
       {!focusMode && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-[200] flex items-center gap-2">
+        <div className="pointer-events-none absolute bottom-3 left-3 z-200 flex items-center gap-2">
           <div className="pointer-events-auto">
             <ZoomIndicator viewportRef={viewportRef} />
           </div>

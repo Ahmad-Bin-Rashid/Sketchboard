@@ -112,11 +112,11 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
     <>
       {showMoreMenu && (
         <div
-          className="fixed inset-0 z-[190] pointer-events-auto"
+          className="fixed inset-0 z-190 pointer-events-auto"
           onClick={() => setShowMoreMenu(false)}
         />
       )}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-3">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-200 flex flex-col items-center gap-3">
         {/* Main Tools Pill Toolbar */}
         <div
           className="flex items-center gap-1.5 rounded-2xl bg-panel-bg p-2 shadow-xl backdrop-blur-md"
@@ -142,7 +142,7 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
             );
           })}
 
-          <div className="h-6 w-[1px] bg-panel-border" />
+          <div className="h-6 w-px bg-panel-border" />
 
           {/* More Shapes Button & Popover */}
           <div className="relative">
@@ -164,12 +164,8 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
 
             {showMoreMenu && (
               <div
-                className="absolute bottom-full mb-3 right-0 z-[210] rounded-2xl bg-panel-bg p-3 shadow-xl border border-panel-border backdrop-blur-md flex flex-col gap-2 min-w-[200px] animate-fade-in"
-                // style={{ border: "1px solid var(--panel-border)" }}
+                className="absolute bottom-full mb-3 right-0 z-210 rounded-2xl bg-panel-bg p-3 shadow-xl border border-panel-border backdrop-blur-md flex flex-col gap-2 min-w-50 animate-fade-in"
               >
-                {/* <div className="text-[10px] font-semibold text-muted-foreground uppercase px-1 pb-1 border-b border-panel-border select-none">
-                  More Shapes
-                </div> */}
                 <div className="grid grid-cols-4 gap-1.5">
                   {moreShapes.map((shape) => {
                     const IconComponent = shape.icon;

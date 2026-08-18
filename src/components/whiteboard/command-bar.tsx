@@ -68,9 +68,6 @@ export function CommandBar({
     selectedShapeIds,
     setSelectedShapeIds,
     shapes,
-    setPan,
-    setZoom,
-    zoom,
     showGrid,
     setShowGrid,
     snapToGrid,
@@ -199,7 +196,7 @@ export function CommandBar({
     <>
       <div
         ref={barRef}
-        className="fixed top-3 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-1 rounded-xl bg-panel-bg p-1.5 shadow-md border border-panel-border backdrop-blur-md transition select-none"
+        className="fixed top-3 left-1/2 -translate-x-1/2 z-200 flex items-center gap-1 rounded-xl bg-panel-bg p-1.5 shadow-md border border-panel-border backdrop-blur-md transition select-none"
         style={{ pointerEvents: "auto" }}
       >
         {/* Group 1: Undo / Redo */}
@@ -222,7 +219,7 @@ export function CommandBar({
           </button>
         </div>
 
-        <div className="w-[1px] h-4 bg-panel-border mx-1" />
+        <div className="w-px h-4 bg-panel-border mx-1" />
 
         {/* Group 2: Clipboard Actions */}
         <div className="flex items-center">
@@ -244,7 +241,7 @@ export function CommandBar({
           </button>
         </div>
 
-        <div className="w-[1px] h-4 bg-panel-border mx-1" />
+        <div className="w-px h-4 bg-panel-border mx-1" />
 
         {/* Group 3: Arrange Layering */}
         <div className="relative">
@@ -261,7 +258,7 @@ export function CommandBar({
           </button>
 
           {activeDropdown === "arrange" && (
-            <div className="absolute top-full left-0 mt-1.5 w-40 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-[300]">
+            <div className="absolute top-full left-0 mt-1.5 w-40 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-300">
               <button
                 onClick={() => handleArrange("front")}
                 className="w-full text-left px-2.5 py-1.5 text-xs rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
@@ -305,7 +302,7 @@ export function CommandBar({
           </button>
 
           {activeDropdown === "align" && (
-            <div className="absolute top-full left-0 mt-1.5 w-44 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-[300]">
+            <div className="absolute top-full left-0 mt-1.5 w-44 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-300">
               <button
                 onClick={() => handleAlign("left")}
                 className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-xs rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
@@ -370,7 +367,7 @@ export function CommandBar({
           </button>
 
           {activeDropdown === "export" && (
-            <div className="absolute top-full left-0 mt-1.5 w-44 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-[300]">
+            <div className="absolute top-full left-0 mt-1.5 w-44 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-300">
               <button
                 onClick={() => {
                   exportBoardAsPNG(shapesList, boardName);
@@ -419,7 +416,7 @@ export function CommandBar({
           </button>
 
           {activeDropdown === "board" && (
-            <div className="absolute top-full right-0 mt-1.5 w-48 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-[300]">
+            <div className="absolute top-full right-0 mt-1.5 w-48 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-300">
               <button
                 onClick={() => {
                   setShowEmbedDialog(true);
@@ -493,51 +490,8 @@ export function CommandBar({
           )}
         </div>
 
-        <div className="w-[1px] h-4 bg-panel-border mx-1" />
+        <div className="w-px h-4 bg-panel-border mx-1" />
 
-        {/* Group 7: View Fits (No need for zoom options in Command Bar - Keep it commented for now) */}
-        {/* <div className="flex items-center">
-          <button
-            onClick={() => fitToContent(shapesList, viewportRef, setPan, setZoom)}
-            className="p-1.5 rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
-            title="Fit to Screen"
-          >
-            <Maximize className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => {
-              if (viewportRef.current) {
-                const rect = viewportRef.current.getBoundingClientRect();
-                const vx = rect.width / 2;
-                const vy = rect.height / 2;
-                if (shapesList.length === 0) {
-                  setZoom(1);
-                  setPan({ x: 0, y: 0 });
-                } else {
-                  // Fit content but force zoom 1
-                  let minX = Infinity;
-                  let minY = Infinity;
-                  let maxX = -Infinity;
-                  let maxY = -Infinity;
-                  shapesList.forEach((shape) => {
-                    if (shape.x < minX) minX = shape.x;
-                    if (shape.y < minY) minY = shape.y;
-                    if (shape.x + shape.width > maxX) maxX = shape.x + shape.width;
-                    if (shape.y + shape.height > maxY) maxY = shape.y + shape.height;
-                  });
-                  const cx = minX + (maxX - minX) / 2;
-                  const cy = minY + (maxY - minY) / 2;
-                  setZoom(1);
-                  setPan({ x: vx - cx, y: vy - cy });
-                }
-              }
-            }}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold text-foreground hover:bg-surface-hover transition cursor-pointer"
-            title="Zoom to 100%"
-          >
-            100%
-          </button>
-        </div> */}
       </div>
 
       {/* Embed insertion modal/dialog */}
@@ -548,7 +502,7 @@ export function CommandBar({
       />
       {/* Import feedback toast */}
       {importMsg && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[200] rounded-lg bg-card px-3 py-1.5 text-xs text-foreground shadow-md border border-panel-border backdrop-blur-md">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-200 rounded-lg bg-card px-3 py-1.5 text-xs text-foreground shadow-md border border-panel-border backdrop-blur-md">
           {importMsg}
         </div>
       )}

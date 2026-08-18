@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import * as Y from "yjs";
 import {
   Bold,
@@ -9,8 +9,6 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  Layers,
-  Sparkles,
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
@@ -65,7 +63,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
 
   return (
     <div
-      className="fixed right-4 top-1/2 -translate-y-1/2 z-[200] w-60 max-h-[85vh] overflow-y-auto select-none rounded-2xl bg-panel-bg p-4 shadow-xl border border-panel-border backdrop-blur-md flex flex-col gap-4 animate-fade-in custom-scrollbar"
+      className="fixed right-4 top-1/2 -translate-y-1/2 z-200 w-60 max-h-[85vh] overflow-y-auto select-none rounded-2xl bg-panel-bg p-4 shadow-xl border border-panel-border backdrop-blur-md flex flex-col gap-4 animate-fade-in custom-scrollbar"
       style={{ pointerEvents: "auto" }}
     >
 
@@ -100,7 +98,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
 
             {/* Hex Picker Input */}
             <div className="flex items-center gap-2">
-              <div className="relative h-7 w-7 rounded-lg border border-panel-border overflow-hidden cursor-pointer flex-shrink-0">
+              <div className="relative h-7 w-7 rounded-lg border border-panel-border overflow-hidden cursor-pointer shrink-0">
                 <input
                   type="color"
                   value={baseline.stroke.startsWith("#") ? baseline.stroke : SHAPE_DEFAULTS.STROKE}
@@ -390,7 +388,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
               <button
                 onClick={() => updateSelectedShapesStyle({ shadow: !baseline.shadow })}
                 className={cn(
-                  "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
                   baseline.shadow ? "bg-primary" : "bg-panel-border"
                 )}
               >

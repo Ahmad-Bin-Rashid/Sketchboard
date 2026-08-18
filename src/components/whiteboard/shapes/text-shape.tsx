@@ -74,7 +74,7 @@ export function TextShape({
         {/* Hidden mirror element to calculate text bounding box */}
         <span
           ref={measureRef}
-          className="absolute pointer-events-none invisible whitespace-pre-wrap break-words"
+          className="absolute pointer-events-none invisible whitespace-pre-wrap wrap-break-word"
           style={{
             fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
             fontFamily: shape.fontFamily || SHAPE_DEFAULTS.FONT_FAMILY,
@@ -96,7 +96,7 @@ export function TextShape({
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           onPointerDown={(e) => e.stopPropagation()} // Prevent drag-selection/pan on input
-          className="w-full h-full bg-transparent resize-none overflow-hidden p-0 break-words select-text pointer-events-auto"
+          className="w-full h-full bg-transparent resize-none overflow-hidden p-0 wrap-break-word select-text pointer-events-auto"
           style={{
             color: shape.stroke || "var(--foreground)",
             fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,
@@ -119,7 +119,7 @@ export function TextShape({
 
   return (
     <div
-      className="w-full h-full select-none break-words whitespace-pre-wrap flex items-start"
+      className="w-full h-full select-none wrap-break-word whitespace-pre-wrap flex items-start"
       style={{
         color: shape.stroke || "var(--foreground)",
         fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,

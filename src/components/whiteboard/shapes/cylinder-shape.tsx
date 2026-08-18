@@ -16,34 +16,6 @@ export function CylinderShapeComponent({ shape }: CylinderShapeProps) {
   const fill = shape.fill === "transparent" ? "none" : shape.fill;
 
   return (
-    // <svg
-    //   viewBox="0 0 100 100"
-    //   preserveAspectRatio="none"
-    //   className="w-full h-full pointer-events-none overflow-visible"
-    // >
-    //   {/* Cylinder body: side walls, bottom curve, top boundary */}
-    //   <path
-    //     d="M 0,15 L 0,85 A 50,15 0 0,0 100,85 L 100,15 Z"
-    //     fill={fill}
-    //     stroke={shape.stroke}
-    //     strokeWidth={shape.strokeWidth}
-    //     strokeDasharray={dashArray}
-    //     strokeLinejoin="round"
-    //     vectorEffect="non-scaling-stroke"
-    //   />
-    //   {/* Top face ellipse */}
-    //   <ellipse
-    //     cx="50"
-    //     cy="15"
-    //     rx="50"
-    //     ry="15"
-    //     fill={fill}
-    //     stroke={shape.stroke}
-    //     strokeWidth={shape.strokeWidth}
-    //     strokeDasharray={dashArray}
-    //     vectorEffect="non-scaling-stroke"
-    //   />
-    // </svg>
     <svg
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
