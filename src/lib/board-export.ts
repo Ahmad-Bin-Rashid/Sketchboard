@@ -39,7 +39,25 @@ export interface ImportResult {
   error?: string;
 }
 
-const VALID_TYPES: ShapeType[] = ["rectangle", "ellipse", "draw", "text", "sticky", "image", "embed", "line", "arrow"];
+const VALID_TYPES: ShapeType[] = [
+  "rectangle",
+  "ellipse",
+  "draw",
+  "text",
+  "sticky",
+  "image",
+  "embed",
+  "line",
+  "arrow",
+  "triangle",
+  "diamond",
+  "parallelogram",
+  "hexagon",
+  "octagon",
+  "cylinder",
+  "rounded-rectangle",
+  "speech-bubble",
+];
 
 // ─── Type Guard ──────────────────────────────────────────────────────────────
 
@@ -360,6 +378,120 @@ export function generateSVGString(shapes: CustomShape[]): string {
             <text x="${shape.x + shape.width / 2}" y="${shape.y + shape.height / 2}" font-family="sans-serif" font-size="12" fill="#4b5563" text-anchor="middle">Embed URL: ${escapeHtml(shape.src)}</text>
           </g>
         `;
+      case "triangle": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const p1x = shape.x + shape.width / 2;
+        const p1y = shape.y;
+        const p2x = shape.x + shape.width;
+        const p2y = shape.y + shape.height;
+        const p3x = shape.x;
+        const p3y = shape.y + shape.height;
+        return `<polygon points="${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
+      case "diamond": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const p1x = shape.x + shape.width / 2;
+        const p1y = shape.y;
+        const p2x = shape.x + shape.width;
+        const p2y = shape.y + shape.height / 2;
+        const p3x = shape.x + shape.width / 2;
+        const p3y = shape.y + shape.height;
+        const p4x = shape.x;
+        const p4y = shape.y + shape.height / 2;
+        return `<polygon points="${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y} ${p4x},${p4y}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
+      case "parallelogram": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const p1x = shape.x + shape.width * 0.25;
+        const p1y = shape.y;
+        const p2x = shape.x + shape.width;
+        const p2y = shape.y;
+        const p3x = shape.x + shape.width * 0.75;
+        const p3y = shape.y + shape.height;
+        const p4x = shape.x;
+        const p4y = shape.y + shape.height;
+        return `<polygon points="${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y} ${p4x},${p4y}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
+      case "hexagon": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const p1x = shape.x + shape.width * 0.25;
+        const p1y = shape.y;
+        const p2x = shape.x + shape.width * 0.75;
+        const p2y = shape.y;
+        const p3x = shape.x + shape.width;
+        const p3y = shape.y + shape.height * 0.5;
+        const p4x = shape.x + shape.width * 0.75;
+        const p4y = shape.y + shape.height;
+        const p5x = shape.x + shape.width * 0.25;
+        const p5y = shape.y + shape.height;
+        const p6x = shape.x;
+        const p6y = shape.y + shape.height * 0.5;
+        return `<polygon points="${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y} ${p4x},${p4y} ${p5x},${p5y} ${p6x},${p6y}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
+      case "octagon": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const p1x = shape.x + shape.width * 0.3;
+        const p1y = shape.y;
+        const p2x = shape.x + shape.width * 0.7;
+        const p2y = shape.y;
+        const p3x = shape.x + shape.width;
+        const p3y = shape.y + shape.height * 0.3;
+        const p4x = shape.x + shape.width;
+        const p4y = shape.y + shape.height * 0.7;
+        const p5x = shape.x + shape.width * 0.7;
+        const p5y = shape.y + shape.height;
+        const p6x = shape.x + shape.width * 0.3;
+        const p6y = shape.y + shape.height;
+        const p7x = shape.x;
+        const p7y = shape.y + shape.height * 0.7;
+        const p8x = shape.x;
+        const p8y = shape.y + shape.height * 0.3;
+        return `<polygon points="${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y} ${p4x},${p4y} ${p5x},${p5y} ${p6x},${p6y} ${p7x},${p7y} ${p8x},${p8y}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
+      case "cylinder": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const ry = shape.height * 0.15;
+        const rx = shape.width / 2;
+        const cx = shape.x + rx;
+        const cy = shape.y + ry;
+        return `
+          <g opacity="${opacity}">
+            <path d="M ${shape.x} ${shape.y + ry} L ${shape.x} ${shape.y + shape.height - ry} A ${rx} ${ry} 0 0 0 ${shape.x + shape.width} ${shape.y + shape.height - ry} L ${shape.x + shape.width} ${shape.y + ry} Z" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" ${strokeDash} stroke-linejoin="round" />
+            <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" ${strokeDash} />
+          </g>
+        `;
+      }
+      case "rounded-rectangle": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const r = (shape as any).borderRadius ?? 16;
+        return `<rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" rx="${r}" ry="${r}" opacity="${opacity}" ${strokeDash} />`;
+      }
+      case "speech-bubble": {
+        let strokeDash = "";
+        if (shape.strokeStyle === "dashed") strokeDash = `stroke-dasharray="6,6"`;
+        else if (shape.strokeStyle === "dotted") strokeDash = `stroke-dasharray="2,4"`;
+        const w = shape.width;
+        const h = shape.height;
+        const r = Math.min(15, Math.min(w * 0.15, h * 0.15));
+        const x = shape.x;
+        const y = shape.y;
+        const d = `M ${x + r} ${y} L ${x + w - r} ${y} A ${r} ${r} 0 0 1 ${x + w} ${y + r} L ${x + w} ${y + h * 0.8 - r} A ${r} ${r} 0 0 1 ${x + w - r} ${y + h * 0.8} L ${x + w * 0.35} ${y + h * 0.8} L ${x + w * 0.15} ${y + h} L ${x + w * 0.20} ${y + h * 0.8} L ${x + r} ${y + h * 0.8} A ${r} ${r} 0 0 1 ${x} ${y + h * 0.8 - r} L ${x} ${y + r} A ${r} ${r} 0 0 1 ${x + r} ${y} Z`.replace(/\s+/g, " ");
+        return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
       default:
         return "";
     }

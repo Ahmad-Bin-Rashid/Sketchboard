@@ -61,7 +61,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
 
 
   const isTextOrSticky = selectedShapes.some(s => s.type === "text" || s.type === "sticky");
-  const isRect = selectedShapes.some(s => s.type === "rectangle");
+  const isRectOrRoundedRect = selectedShapes.some(s => s.type === "rectangle" || s.type === "rounded-rectangle");
 
   return (
     <div
@@ -358,7 +358,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
       )}
 
       {/* ─── SECTION: Rectangle Options ─── */}
-      {isRect && (
+      {isRectOrRoundedRect && (
         <div className="flex flex-col gap-2">
           
             <div className="flex flex-col gap-2">

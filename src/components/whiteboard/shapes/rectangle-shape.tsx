@@ -12,7 +12,7 @@ export function RectangleShape({ shape }: RectangleShapeProps) {
       style={{
         border: `${shape.strokeWidth}px ${shape.strokeStyle || "solid"} ${shape.stroke}`,
         backgroundColor: shape.fill,
-        borderRadius: `${shape.borderRadius ?? 4}px`,
+        borderRadius: `${shape.borderRadius ?? 2}px`,
       }}
     />
   );

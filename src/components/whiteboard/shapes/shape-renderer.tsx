@@ -11,6 +11,14 @@ import { TextShape } from "./text-shape";
 import { StickyShape } from "./sticky-shape";
 import { ImageShape } from "./image-shape";
 import { EmbedShape } from "./embed-shape";
+import { TriangleShape } from "./triangle-shape";
+import { DiamondShape } from "./diamond-shape";
+import { ParallelogramShape } from "./parallelogram-shape";
+import { HexagonShape } from "./hexagon-shape";
+import { OctagonShape } from "./octagon-shape";
+import { CylinderShapeComponent } from "./cylinder-shape";
+import { RoundedRectangleShapeComponent } from "./rounded-rectangle-shape";
+import { SpeechBubbleShapeComponent } from "./speech-bubble-shape";
 import { cn } from "@/lib/utils";
 
 interface ShapeRendererProps {
@@ -210,6 +218,22 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
             isReadOnly={isDraft}
           />
         );
+      case "triangle":
+        return <TriangleShape shape={shape as any} />;
+      case "diamond":
+        return <DiamondShape shape={shape as any} />;
+      case "parallelogram":
+        return <ParallelogramShape shape={shape as any} />;
+      case "hexagon":
+        return <HexagonShape shape={shape as any} />;
+      case "octagon":
+        return <OctagonShape shape={shape as any} />;
+      case "cylinder":
+        return <CylinderShapeComponent shape={shape as any} />;
+      case "rounded-rectangle":
+        return <RoundedRectangleShapeComponent shape={shape as any} />;
+      case "speech-bubble":
+        return <SpeechBubbleShapeComponent shape={shape as any} />;
       default:
         return null;
     }

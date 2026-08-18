@@ -1,4 +1,21 @@
-export type ShapeType = "rectangle" | "ellipse" | "draw" | "text" | "sticky" | "image" | "embed" | "line" | "arrow";
+export type ShapeType =
+  | "rectangle"
+  | "ellipse"
+  | "draw"
+  | "text"
+  | "sticky"
+  | "image"
+  | "embed"
+  | "line"
+  | "arrow"
+  | "triangle"
+  | "diamond"
+  | "parallelogram"
+  | "hexagon"
+  | "octagon"
+  | "cylinder"
+  | "rounded-rectangle"
+  | "speech-bubble";
 export type ToolType = ShapeType | "select" | "hand" | "laser";
 
 export interface BaseShape {
@@ -82,6 +99,39 @@ export interface ArrowShape extends BaseShape {
   y2n: number;
 }
 
+export interface TriangleShape extends BaseShape {
+  type: "triangle";
+}
+
+export interface DiamondShape extends BaseShape {
+  type: "diamond";
+}
+
+export interface ParallelogramShape extends BaseShape {
+  type: "parallelogram";
+}
+
+export interface HexagonShape extends BaseShape {
+  type: "hexagon";
+}
+
+export interface OctagonShape extends BaseShape {
+  type: "octagon";
+}
+
+export interface CylinderShape extends BaseShape {
+  type: "cylinder";
+}
+
+export interface RoundedRectangleShape extends BaseShape {
+  type: "rounded-rectangle";
+  borderRadius?: number;
+}
+
+export interface SpeechBubbleShape extends BaseShape {
+  type: "speech-bubble";
+}
+
 export type CustomShape =
   | RectShape
   | EllipseShape
@@ -91,4 +141,12 @@ export type CustomShape =
   | ImageShape
   | EmbedShape
   | LineShape
-  | ArrowShape;
+  | ArrowShape
+  | TriangleShape
+  | DiamondShape
+  | ParallelogramShape
+  | HexagonShape
+  | OctagonShape
+  | CylinderShape
+  | RoundedRectangleShape
+  | SpeechBubbleShape;
