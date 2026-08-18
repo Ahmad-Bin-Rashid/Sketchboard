@@ -19,6 +19,7 @@ import { OctagonShape } from "./octagon-shape";
 import { CylinderShapeComponent } from "./cylinder-shape";
 import { RoundedRectangleShapeComponent } from "./rounded-rectangle-shape";
 import { SpeechBubbleShapeComponent } from "./speech-bubble-shape";
+import { FrameShapeComponent } from "./frame-shape";
 import { cn } from "@/lib/utils";
 
 interface ShapeRendererProps {
@@ -64,7 +65,7 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isDraft || activeTool !== "select") return;
-    if (shape.type === "text" || shape.type === "sticky") {
+    if (shape.type === "text" || shape.type === "sticky" || shape.type === "frame") {
       e.stopPropagation();
       setIsEditing(true);
     }
@@ -96,11 +97,31 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     startPointerRef.current = { x: e.clientX, y: e.clientY };
 
     const snapshot: Record<string, CustomShape> = {};
-    currentSelection.forEach((id) => {
-      const s = shapes[id];
-      if (s) {
-        snapshot[id] = { ...s };
-      }
+    const selectedShapes = currentSelection.map(id => shapes[id]).filter((s): s is CustomShape => !!s);
+    const selectedFrames = selectedShapes.filter(s => s.type === "frame");
+    const childShapes: CustomShape[] = [];
+    if (selectedFrames.length > 0) {
+      Object.values(shapes).forEach((shapeItem) => {
+        const isAlreadySelected = selectedShapes.some(s => s.id === shapeItem.id);
+        if (!isAlreadySelected) {
+          const isInsideAnyFrame = selectedFrames.some(frame => {
+            return (
+              shapeItem.x >= frame.x &&
+              shapeItem.y >= frame.y &&
+              shapeItem.x + shapeItem.width <= frame.x + frame.width &&
+              shapeItem.y + shapeItem.height <= frame.y + frame.height
+            );
+          });
+          if (isInsideAnyFrame) {
+            childShapes.push(shapeItem);
+          }
+        }
+      });
+    }
+
+    const allMovingShapes = [...selectedShapes, ...childShapes];
+    allMovingShapes.forEach((s) => {
+      snapshot[s.id] = { ...s };
     });
     startShapesRef.current = snapshot;
     setIsDragging(true);
@@ -171,7 +192,7 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     const dy = e.clientY - startPointerRef.current.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < 3 && isAlreadySelectedRef.current && (shape.type === "text" || shape.type === "sticky")) {
+    if (distance < 3 && isAlreadySelectedRef.current && (shape.type === "text" || shape.type === "sticky" || shape.type === "frame")) {
       setIsEditing(true);
     }
   };
@@ -234,17 +255,30 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
         return <RoundedRectangleShapeComponent shape={shape as any} />;
       case "speech-bubble":
         return <SpeechBubbleShapeComponent shape={shape as any} />;
+      case "frame":
+        return (
+          <FrameShapeComponent
+            shape={shape as any}
+            onUpdate={handleUpdate as any}
+            isReadOnly={isDraft}
+            isEditing={isEditing}
+            onEditEnd={() => setIsEditing(false)}
+          />
+        );
       default:
         return null;
     }
   };
+
+  const isSelectActive = activeTool === "select" && !isDraft;
 
   return (
     <div
       className={cn(
         "absolute select-none",
         isSelected && "ring-2 ring-primary ring-offset-1 rounded-sm",
-        isDraft && "opacity-60 pointer-events-none"
+        isDraft && "opacity-60 pointer-events-none",
+        !isSelectActive && "pointer-events-none-children"
       )}
       style={{
         left: shape.x,
@@ -253,8 +287,7 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
         height: shape.height,
         opacity: shape.opacity,
         zIndex: isSelected ? 1000 : undefined,
-        // Block interaction if not in select mode (pointer events should go to canvas for shape creation)
-        pointerEvents: activeTool === "select" && !isDraft ? "auto" : "none",
+        pointerEvents: "none", // Always none so the bounding box is transparent to pointer events
         filter: shape.shadow
           ? `drop-shadow(0px ${shape.shadowSpread ?? 4}px ${shape.shadowBlur ?? 8}px rgba(0, 0, 0, 0.15))`
           : undefined,

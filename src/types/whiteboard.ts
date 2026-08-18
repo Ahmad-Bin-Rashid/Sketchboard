@@ -15,7 +15,8 @@ export type ShapeType =
   | "octagon"
   | "cylinder"
   | "rounded-rectangle"
-  | "speech-bubble";
+  | "speech-bubble"
+  | "frame";
 export type ToolType = ShapeType | "select" | "hand" | "laser";
 
 export interface BaseShape {
@@ -132,6 +133,11 @@ export interface SpeechBubbleShape extends BaseShape {
   type: "speech-bubble";
 }
 
+export interface FrameShape extends BaseShape {
+  type: "frame";
+  name: string;
+}
+
 export type CustomShape =
   | RectShape
   | EllipseShape
@@ -149,4 +155,5 @@ export type CustomShape =
   | OctagonShape
   | CylinderShape
   | RoundedRectangleShape
-  | SpeechBubbleShape;
+  | SpeechBubbleShape
+  | FrameShape;

@@ -8,7 +8,7 @@ interface ImageShapeProps {
 export function ImageShape({ shape }: ImageShapeProps) {
   return (
     <div
-      className="w-full h-full overflow-hidden pointer-events-none"
+      className="w-full h-full overflow-hidden pointer-events-auto"
       style={{
         border: `${shape.strokeWidth}px solid ${shape.stroke}`,
         borderRadius: "4px",

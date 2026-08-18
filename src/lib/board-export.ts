@@ -57,6 +57,7 @@ const VALID_TYPES: ShapeType[] = [
   "cylinder",
   "rounded-rectangle",
   "speech-bubble",
+  "frame",
 ];
 
 // ─── Type Guard ──────────────────────────────────────────────────────────────
@@ -124,6 +125,10 @@ function isValidShape(s: unknown): s is CustomShape {
       typeof shape.x2n === "number" &&
       typeof shape.y2n === "number"
     );
+  }
+
+  if (shape.type === "frame") {
+    return typeof (shape as any).name === "string";
   }
 
   return true;
@@ -491,6 +496,15 @@ export function generateSVGString(shapes: CustomShape[]): string {
         const y = shape.y;
         const d = `M ${x + r} ${y} L ${x + w - r} ${y} A ${r} ${r} 0 0 1 ${x + w} ${y + r} L ${x + w} ${y + h * 0.8 - r} A ${r} ${r} 0 0 1 ${x + w - r} ${y + h * 0.8} L ${x + w * 0.35} ${y + h * 0.8} L ${x + w * 0.15} ${y + h} L ${x + w * 0.20} ${y + h * 0.8} L ${x + r} ${y + h * 0.8} A ${r} ${r} 0 0 1 ${x} ${y + h * 0.8 - r} L ${x} ${y + r} A ${r} ${r} 0 0 1 ${x + r} ${y} Z`.replace(/\s+/g, " ");
         return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${shape.strokeWidth}" opacity="${opacity}" ${strokeDash} stroke-linejoin="round" />`;
+      }
+      case "frame": {
+        const label = (shape as any).name || "Frame";
+        return `
+          <g opacity="${opacity}">
+            <rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="none" stroke="${stroke}" stroke-width="${shape.strokeWidth}" stroke-dasharray="4,4" rx="12" ry="12" />
+            <text x="${shape.x + 8}" y="${shape.y - 6}" font-family="sans-serif" font-size="10" fill="${stroke}">${escapeHtml(label)}</text>
+          </g>
+        `;
       }
       default:
         return "";

@@ -78,7 +78,29 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
       startBoxBoundsRef.current = { ...boxBounds };
       
       const currentShapesSnapshot: Record<string, CustomShape> = {};
-      selectedShapes.forEach((s) => {
+      const selectedFrames = selectedShapes.filter((s) => s.type === "frame");
+      const childShapes: CustomShape[] = [];
+      if (selectedFrames.length > 0) {
+        Object.values(shapes).forEach((shape) => {
+          const isAlreadySelected = selectedShapes.some((s) => s.id === shape.id);
+          if (!isAlreadySelected) {
+            const isInsideAnyFrame = selectedFrames.some((frame) => {
+              return (
+                shape.x >= frame.x &&
+                shape.y >= frame.y &&
+                shape.x + shape.width <= frame.x + frame.width &&
+                shape.y + shape.height <= frame.y + frame.height
+              );
+            });
+            if (isInsideAnyFrame) {
+              childShapes.push(shape);
+            }
+          }
+        });
+      }
+
+      const allMovingShapes = [...selectedShapes, ...childShapes];
+      allMovingShapes.forEach((s) => {
         currentShapesSnapshot[s.id] = { ...s };
       });
       startShapesRef.current = currentShapesSnapshot;
@@ -240,7 +262,7 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
         
         if (doc) {
           doc.transact(() => {
-            selectedShapeIds.forEach((id) => {
+            Object.keys(startShapesRef.current).forEach((id) => {
               const shape = currentShapes[id];
               if (shape) {
                 shapesMap.set(id, shape);

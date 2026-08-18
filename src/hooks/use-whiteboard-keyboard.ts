@@ -89,6 +89,9 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         } else if (key === "h") {
           e.preventDefault();
           setActiveTool(activeTool === "hand" ? "select" : "hand");
+        } else if (key === "f") {
+          e.preventDefault();
+          setActiveTool("frame");
         }
       }
 

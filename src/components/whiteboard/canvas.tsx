@@ -128,7 +128,16 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           const defaultFill = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_FILL : "transparent";
           const defaultStroke = activeTool === "sticky" ? SHAPE_DEFAULTS.STICKY_STROKE : defaultStrokeColor;
           const isLineOrArrow = activeTool === "line" || activeTool === "arrow";
+          const isFrame = activeTool === "frame";
           
+          let frameProps = {};
+          if (isFrame) {
+            const existingFramesCount = Object.values(shapes).filter((s) => s.type === "frame").length;
+            frameProps = {
+              name: `Frame ${existingFramesCount + 1}`,
+            };
+          }
+
           newShape = {
             id,
             type: activeTool,
@@ -137,12 +146,13 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             width: 0,
             height: 0,
             fill: defaultFill,
-            stroke: defaultStroke,
-            strokeWidth: activeTool === "sticky" ? 1 : 2,
+            stroke: isFrame ? "#94a3b8" : defaultStroke,
+            strokeWidth: activeTool === "sticky" ? 1 : (isFrame ? 1.5 : 2),
             opacity: 1.0,
             index,
             ...(activeTool === "text" || activeTool === "sticky" ? { text: "", fontSize: SHAPE_DEFAULTS.FONT_SIZE, fontFamily: SHAPE_DEFAULTS.FONT_FAMILY } : {}),
             ...(isLineOrArrow ? { x1n: 0, y1n: 0, x2n: 0, y2n: 0 } : {}),
+            ...frameProps,
           } as CustomShape;
         }
 
@@ -331,6 +341,11 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
               finalShape.width = SHAPE_DEFAULTS.DEFAULT_TEXT_WIDTH;
               finalShape.height = finalShape.type === "text" ? SHAPE_DEFAULTS.DEFAULT_TEXT_HEIGHT : SHAPE_DEFAULTS.DEFAULT_STICKY_HEIGHT;
               // Center the clicked coordinate as the shape's center
+              finalShape.x = finalShape.x - finalShape.width / 2;
+              finalShape.y = finalShape.y - finalShape.height / 2;
+            } else if (finalShape.type === "frame") {
+              finalShape.width = 400;
+              finalShape.height = 300;
               finalShape.x = finalShape.x - finalShape.width / 2;
               finalShape.y = finalShape.y - finalShape.height / 2;
             } else {

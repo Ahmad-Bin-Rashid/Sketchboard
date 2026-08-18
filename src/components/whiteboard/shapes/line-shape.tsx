@@ -13,6 +13,18 @@ export function LineShape({ shape }: LineShapeProps) {
 
   return (
     <svg className="w-full h-full overflow-visible pointer-events-none">
+      {/* Thick invisible click target for selection */}
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="transparent"
+        strokeWidth={Math.max(16, shape.strokeWidth)}
+        strokeLinecap="round"
+        className="pointer-events-auto cursor-pointer"
+      />
+      {/* Visible line */}
       <line
         x1={x1}
         y1={y1}

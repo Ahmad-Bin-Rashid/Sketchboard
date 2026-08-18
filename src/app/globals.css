@@ -334,3 +334,8 @@ body {
     text-align: center;
   }
 }
+
+/* Selection pointer-events overrides */
+.pointer-events-none-children * {
+  pointer-events: none !important;
+}

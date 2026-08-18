@@ -54,6 +54,17 @@ export function DrawShape({ shape }: DrawShapeProps) {
 
     return (
       <svg className="w-full h-full overflow-visible pointer-events-none absolute inset-0">
+        {/* Thick invisible click target for selection */}
+        <path
+          d={linePathData}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={Math.max(16, shape.strokeWidth)}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="pointer-events-auto cursor-pointer"
+        />
+        {/* Visible line */}
         <path
           d={linePathData}
           fill="none"
@@ -69,11 +80,23 @@ export function DrawShape({ shape }: DrawShapeProps) {
 
   return (
     <svg className="w-full h-full overflow-visible pointer-events-none absolute inset-0">
+      {/* Thick invisible click target for selection */}
+      <path
+        d={linePathData}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={Math.max(16, shape.strokeWidth)}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="pointer-events-auto cursor-pointer"
+      />
+      {/* Visible brush shape */}
       <path
         d={pathData}
         fill={shape.stroke || "#000"}
         stroke={shape.stroke || "#000"}
         strokeWidth={1}
+        className="pointer-events-auto"
       />
     </svg>
   );

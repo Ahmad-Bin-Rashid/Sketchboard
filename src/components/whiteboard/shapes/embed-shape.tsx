@@ -85,7 +85,7 @@ export function EmbedShape({ shape, onUpdate, isReadOnly = false }: EmbedShapePr
   const embedSrc = getEmbedUrl(shape.src);
 
   return (
-    <div className="w-full h-full relative rounded-lg border border-panel-border overflow-hidden bg-panel-bg shadow-sm">
+    <div className="w-full h-full relative rounded-lg border border-panel-border overflow-hidden bg-panel-bg shadow-sm pointer-events-auto">
       {/* Render standard iframe embed */}
       <iframe
         src={embedSrc}
@@ -98,7 +98,7 @@ export function EmbedShape({ shape, onUpdate, isReadOnly = false }: EmbedShapePr
 
       {/* Pointer overlay blocker to allow selecting/dragging the shape when not selected */}
       {(!isSelected || isReadOnly) && (
-        <div className="absolute inset-0 bg-transparent z-[10] cursor-grab active:cursor-grabbing" />
+        <div className="absolute inset-0 bg-transparent z-10 cursor-grab active:cursor-grabbing" />
       )}
     </div>
   );

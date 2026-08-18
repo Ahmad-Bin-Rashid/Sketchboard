@@ -60,14 +60,16 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
 
   const isTextOrSticky = selectedShapes.some(s => s.type === "text" || s.type === "sticky");
   const isRectOrRoundedRect = selectedShapes.some(s => s.type === "rectangle" || s.type === "rounded-rectangle");
+  const isFrame = selectedShapes.some(s => s.type === "frame");
 
   return (
     <div
       className="fixed right-4 top-1/2 -translate-y-1/2 z-200 w-60 max-h-[85vh] overflow-y-auto select-none rounded-2xl bg-panel-bg p-4 shadow-xl border border-panel-border backdrop-blur-md flex flex-col gap-4 animate-fade-in custom-scrollbar"
       style={{ pointerEvents: "auto" }}
     >
-
+        
       {/* ─── SECTION: Color & Fill ─── */}
+      {!isFrame && (
       <div className="flex flex-col gap-2">
         <button
           className="flex items-center justify-between w-full text-[11px] text-foreground uppercase py-0.5"
@@ -149,9 +151,10 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
           </div>
         {/* )} */}
       </div>
+      )}
 
       {/* ─── SECTION: Line & Stroke style ─── */}
-      {!isTextOrSticky && (
+      {!isTextOrSticky && !isFrame && (
       <div className="flex flex-col gap-2">
         <button
           className="flex items-center justify-between w-full text-[11px] text-foreground uppercase"
@@ -226,7 +229,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
       </div>
 
       {/* ─── SECTION: Typography (Text/Sticky only) ─── */}
-      {isTextOrSticky && (
+      {isTextOrSticky && !isFrame &&(
         <div className="flex flex-col gap-2">
           <button
             className="flex items-center justify-between w-full text-[11px] text-foreground uppercase"

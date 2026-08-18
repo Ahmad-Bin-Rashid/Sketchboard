@@ -32,9 +32,9 @@ export function TextShape({
   useLayoutEffect(() => {
     if (isEditing && measureRef.current) {
       // Get exact text scroll width and height
-      // Add small horizontal (24px) and vertical (12px) padding to accommodate cursors and lines
-      const width = Math.max(64, measureRef.current.scrollWidth + 24);
-      const height = Math.max(shape.fontSize * 1.2, measureRef.current.scrollHeight + 12);
+      // Add small horizontal (4px) and vertical (2px) padding to accommodate cursors and lines
+      const width = Math.max(64, measureRef.current.scrollWidth + 4);
+      const height = Math.max(shape.fontSize * 1.2, measureRef.current.scrollHeight + 2);
 
       const widthDiff = Math.abs(width - (shape.width || 0));
       const heightDiff = Math.abs(height - (shape.height || 0));
@@ -119,7 +119,7 @@ export function TextShape({
 
   return (
     <div
-      className="w-full h-full select-none wrap-break-word whitespace-pre-wrap flex items-start"
+      className="w-full h-full select-none wrap-break-word whitespace-pre-wrap flex items-start pointer-events-auto cursor-pointer"
       style={{
         color: shape.stroke || "var(--foreground)",
         fontSize: `${shape.fontSize ?? SHAPE_DEFAULTS.FONT_SIZE}px`,

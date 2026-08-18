@@ -33,8 +33,8 @@ export function StickyShape({
       // Get exact text scroll width and height
       // Sticky notes have a default size, they start as a post-it and grow as text expands
       // Add 32px padding for post-it note border margins
-      const width = Math.max(120, measureRef.current.scrollWidth + 32);
-      const height = Math.max(120, measureRef.current.scrollHeight + 32);
+      const width = Math.max(120, measureRef.current.scrollWidth + 52);
+      const height = Math.max(120, measureRef.current.scrollHeight + 44);
 
       const widthDiff = Math.abs(width - (shape.width || 0));
       const heightDiff = Math.abs(height - (shape.height || 0));
@@ -66,11 +66,10 @@ export function StickyShape({
 
   return (
     <div
-      className="w-full h-full p-4 rounded-lg shadow-md flex items-center justify-center transition-shadow select-none relative overflow-hidden"
+      className="w-full h-full p-4 rounded-sm shadow-md flex items-center justify-center transition-shadow select-none relative overflow-hidden pointer-events-auto cursor-pointer"
       style={{
         backgroundColor,
-        color: textColor,
-        border: `1px solid ${shape.stroke === "transparent" ? "transparent" : shape.stroke || "#1e293b"}`,
+        color: textColor,               
       }}
     >
       {isEditing ? (

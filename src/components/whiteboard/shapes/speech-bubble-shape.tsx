@@ -21,6 +21,17 @@ export function SpeechBubbleShapeComponent({ shape }: SpeechBubbleShapeProps) {
       preserveAspectRatio="none"
       className="w-full h-full pointer-events-none overflow-visible"
     >
+      {/* Thick invisible click target for selection */}
+      <path
+        d="M 15,0 L 85,0 A 15,15 0 0,1 100,15 L 100,65 A 15,15 0 0,1 85,80 L 35,80 L 15,100 L 20,80 L 15,80 A 15,15 0 0,1 0,65 L 0,15 A 15,15 0 0,1 15,0 Z"
+        fill="none"
+        stroke="transparent"
+        strokeWidth={16}
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+        className="pointer-events-auto cursor-pointer"
+      />
+      {/* Visible path */}
       <path
         d="M 15,0 L 85,0 A 15,15 0 0,1 100,15 L 100,65 A 15,15 0 0,1 85,80 L 35,80 L 15,100 L 20,80 L 15,80 A 15,15 0 0,1 0,65 L 0,15 A 15,15 0 0,1 15,0 Z"
         fill={fill}
@@ -29,6 +40,7 @@ export function SpeechBubbleShapeComponent({ shape }: SpeechBubbleShapeProps) {
         strokeDasharray={dashArray}
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
+        className="pointer-events-auto"
       />
     </svg>
   );

@@ -14,6 +14,7 @@ import {
   Hand,
   Zap,
   ChevronUp,
+  Frame,
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape, ToolType } from "@/types/whiteboard";
@@ -92,6 +93,7 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
     { type: "ellipse" as ToolType, icon: Circle, label: "Ellipse (O)" },
     { type: "text" as ToolType, icon: Type, label: "Text (T)" },
     { type: "sticky" as ToolType, icon: StickyNote, label: "Sticky Note (N)" },
+    { type: "frame" as ToolType, icon: Frame, label: "Frame (F)" },
     { type: "laser" as ToolType, icon: Zap, label: "Laser Pointer" },
   ];
 
