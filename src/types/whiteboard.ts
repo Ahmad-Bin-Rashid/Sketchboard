@@ -17,7 +17,7 @@ export type ShapeType =
   | "rounded-rectangle"
   | "speech-bubble"
   | "frame";
-export type ToolType = ShapeType | "select" | "hand" | "laser";
+export type ToolType = ShapeType | "select" | "hand" | "laser" | "eraser";
 
 export interface BaseShape {
   id: string;

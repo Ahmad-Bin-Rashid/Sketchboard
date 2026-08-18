@@ -15,6 +15,7 @@ import {
   Zap,
   ChevronUp,
   Frame,
+  Eraser,
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape, ToolType } from "@/types/whiteboard";
@@ -87,6 +88,7 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
     { type: "select" as ToolType, icon: MousePointer, label: "Select (S)" },
     { type: "hand" as ToolType, icon: Hand, label: "Hand (H)" },
     { type: "draw" as ToolType, icon: Pencil, label: "Pencil (D)" },
+    { type: "eraser" as ToolType, icon: Eraser, label: "Eraser (E)" },
     { type: "line" as ToolType, icon: Minus, label: "Line (L)" },
     { type: "arrow" as ToolType, icon: ArrowRight, label: "Arrow (A)" },
     { type: "rectangle" as ToolType, icon: Square, label: "Rectangle (R)" },

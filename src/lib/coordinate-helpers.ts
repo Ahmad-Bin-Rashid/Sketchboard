@@ -139,3 +139,94 @@ export function simplifyPath(
   return result;
 }
 
+/**
+ * Helper to determine orientation of ordered triplet (p, q, r).
+ * Returns:
+ * 0 -> p, q, and r are collinear
+ * 1 -> Clockwise
+ * 2 -> Counterclockwise
+ */
+function orientation(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  r: { x: number; y: number }
+): number {
+  const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+  if (Math.abs(val) < 1e-9) return 0; // collinear
+  return val > 0 ? 1 : 2; // clock or counterclock
+}
+
+/**
+ * Helper to check if point q lies on line segment pr
+ */
+function onSegment(
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  r: { x: number; y: number }
+): boolean {
+  return (
+    q.x <= Math.max(p.x, r.x) &&
+    q.x >= Math.min(p.x, r.x) &&
+    q.y <= Math.max(p.y, r.y) &&
+    q.y >= Math.min(p.y, r.y)
+  );
+}
+
+/**
+ * Returns true if line segment p1q1 and p2q2 intersect.
+ */
+function lineSegmentsIntersect(
+  p1: { x: number; y: number },
+  q1: { x: number; y: number },
+  p2: { x: number; y: number },
+  q2: { x: number; y: number }
+): boolean {
+  const o1 = orientation(p1, q1, p2);
+  const o2 = orientation(p1, q1, q2);
+  const o3 = orientation(p2, q2, p1);
+  const o4 = orientation(p2, q2, q1);
+
+  // General case
+  if (o1 !== o2 && o3 !== o4) return true;
+
+  // Special Cases
+  if (o1 === 0 && onSegment(p1, p2, q1)) return true;
+  if (o2 === 0 && onSegment(p1, q2, q1)) return true;
+  if (o3 === 0 && onSegment(p2, p1, q2)) return true;
+  if (o4 === 0 && onSegment(p2, q1, q2)) return true;
+
+  return false;
+}
+
+/**
+ * Returns true if the line segment from p1 to p2 intersects the given rect bounding box.
+ */
+export function lineSegmentIntersectsRect(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  rect: { x: number; y: number; width: number; height: number }
+): boolean {
+  const minX = rect.x;
+  const maxX = rect.x + rect.width;
+  const minY = rect.y;
+  const maxY = rect.y + rect.height;
+
+  // 1. Check if either endpoint is inside the rectangle
+  if (p1.x >= minX && p1.x <= maxX && p1.y >= minY && p1.y <= maxY) return true;
+  if (p2.x >= minX && p2.x <= maxX && p2.y >= minY && p2.y <= maxY) return true;
+
+  // 2. Check if segment intersects any of the four edges of the rectangle
+  const topLeft = { x: minX, y: minY };
+  const topRight = { x: maxX, y: minY };
+  const bottomLeft = { x: minX, y: maxY };
+  const bottomRight = { x: maxX, y: maxY };
+
+  if (lineSegmentsIntersect(p1, p2, topLeft, topRight)) return true;
+  if (lineSegmentsIntersect(p1, p2, topRight, bottomRight)) return true;
+  if (lineSegmentsIntersect(p1, p2, bottomRight, bottomLeft)) return true;
+  if (lineSegmentsIntersect(p1, p2, bottomLeft, topLeft)) return true;
+
+  return false;
+}
+
+

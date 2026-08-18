@@ -92,6 +92,9 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         } else if (key === "f") {
           e.preventDefault();
           setActiveTool("frame");
+        } else if (key === "e") {
+          e.preventDefault();
+          setActiveTool("eraser");
         }
       }
 

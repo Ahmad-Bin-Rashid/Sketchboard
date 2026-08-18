@@ -3,14 +3,14 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
-import { screenToCanvas, pointsToBoundingBox, simplifyPath } from "@/lib/coordinate-helpers";
+import { screenToCanvas, pointsToBoundingBox, simplifyPath, lineSegmentIntersectsRect } from "@/lib/coordinate-helpers";
 import type { CustomShape } from "@/types/whiteboard";
 import { ShapeRenderer } from "./shapes/shape-renderer";
 import { SelectionBox } from "./selection-box";
 import { nanoid } from "nanoid";
 import { generateNewTopIndex } from "@/lib/fractional-index";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
-import { addImageShapes } from "@/lib/board-actions";
+import { addImageShapes, deleteShapes } from "@/lib/board-actions";
 import { useTheme } from "@/components/theme-provider";
 
 
@@ -48,6 +48,10 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
   const panStartRef = useRef({ x: 0, y: 0 });
   const dragStartRef = useRef({ x: 0, y: 0 });
 
+  const [pointerPos, setPointerPos] = useState<{ x: number; y: number } | null>(null);
+  const [isErasing, setIsErasing] = useState(false);
+  const lastEraserPosRef = useRef<{ x: number; y: number } | null>(null);
+
   // Touch tracking — snapshot captured at gesture start to avoid per-frame zoom accumulation
   const touchStartRef = useRef<{
     distance: number;
@@ -55,6 +59,13 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
     pan: { x: number; y: number };
     midpoint: { x: number; y: number };
   } | null>(null);
+
+  // Reset eraser cursor when active tool changes
+  useEffect(() => {
+    if (activeTool !== "eraser") {
+      setPointerPos(null);
+    }
+  }, [activeTool]);
 
   // Pointer Down handler
   const handlePointerDown = useCallback(
@@ -93,11 +104,37 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         return;
       }
 
+      // Eraser Tool handling
+      if (activeTool === "eraser" && e.button === 0) {
+        const rect = viewportRef.current.getBoundingClientRect();
+        const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+        
+        // Find topmost shape under the cursor
+        const sortedShapes = Object.values(shapes).sort((a, b) => b.index.localeCompare(a.index));
+        const clickedShape = sortedShapes.find(shape => 
+          canvasPos.x >= shape.x &&
+          canvasPos.x <= shape.x + shape.width &&
+          canvasPos.y >= shape.y &&
+          canvasPos.y <= shape.y + shape.height
+        );
+
+        if (clickedShape && shapesMap) {
+          deleteShapes([clickedShape.id], shapesMap);
+        }
+
+        lastEraserPosRef.current = canvasPos;
+        setIsErasing(true);
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+        return;
+      }
+
       // 3. Shape Creation Mode
       const isShapeTool =
         activeTool !== "select" &&
         activeTool !== "hand" &&
-        activeTool !== "laser";
+        activeTool !== "laser" &&
+        activeTool !== "eraser";
 
       if (isShapeTool && e.button === 0 && isCanvasBackground) {
         const rect = viewportRef.current.getBoundingClientRect();
@@ -161,7 +198,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         e.stopPropagation();
       }
     },
-    [activeTool, pan, zoom, shapes, setDraftShape, setSelectedShapeIds, viewportRef]
+    [activeTool, pan, zoom, shapes, setDraftShape, setSelectedShapeIds, viewportRef, shapesMap, setIsErasing]
   );
 
   // Pointer Move handler
@@ -178,6 +215,33 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       if (viewportRef.current) {
         const rect = viewportRef.current.getBoundingClientRect();
         const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
+
+        if (activeTool === "eraser") {
+          setPointerPos({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          });
+
+          if (isErasing && lastEraserPosRef.current && shapesMap) {
+            const p1 = lastEraserPosRef.current;
+            const p2 = canvasPos;
+
+            const idsToDelete: string[] = [];
+            Object.values(shapes).forEach((shape) => {
+              if (lineSegmentIntersectsRect(p1, p2, shape)) {
+                idsToDelete.push(shape.id);
+              }
+            });
+
+            if (idsToDelete.length > 0) {
+              deleteShapes(idsToDelete, shapesMap);
+            }
+
+            lastEraserPosRef.current = canvasPos;
+            e.stopPropagation();
+            return;
+          }
+        }
 
         if (rubberBandRect) {
           const start = dragStartRef.current;
@@ -271,7 +335,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         }
       }
     },
-    [isPanning, draftShape, rubberBandRect, pan, zoom, setPan, setDraftShape, setRubberBandRect, viewportRef]
+    [isPanning, draftShape, rubberBandRect, pan, zoom, setPan, setDraftShape, setRubberBandRect, viewportRef, activeTool, isErasing, shapes, shapesMap]
   );
 
   // Pointer Up handler
@@ -279,6 +343,14 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (isPanning) {
         setIsPanning(false);
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        e.stopPropagation();
+        return;
+      }
+
+      if (activeTool === "eraser" && isErasing) {
+        setIsErasing(false);
+        lastEraserPosRef.current = null;
         e.currentTarget.releasePointerCapture(e.pointerId);
         e.stopPropagation();
         return;
@@ -369,7 +441,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         setActiveTool("select");
       }
     },
-    [isPanning, rubberBandRect, shapes, setSelectedShapeIds, setRubberBandRect, draftShape, shapesMap, setDraftShape, setActiveTool]
+    [isPanning, rubberBandRect, shapes, setSelectedShapeIds, setRubberBandRect, draftShape, shapesMap, setDraftShape, setActiveTool, activeTool, isErasing]
   );
 
 
@@ -596,6 +668,8 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           ? "grab"
           : activeTool === "laser"
           ? "crosshair"
+          : activeTool === "eraser"
+          ? "none"
           : "default",
         background: "var(--background)",
       }}
@@ -606,6 +680,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onPaste={handlePaste}
+      onPointerLeave={() => setPointerPos(null)}
     >
       {/* Decorative Canvas Background Grid Pattern */}
       {showGrid && (
@@ -660,6 +735,19 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         )}
         <SelectionBox shapesMap={shapesMap} />
       </div>
+
+      {activeTool === "eraser" && pointerPos && (
+        <div
+          className="pointer-events-none absolute z-50 rounded-full border border-stone-400 bg-stone-100/30 dark:border-stone-500 dark:bg-stone-800/30 shadow-sm animate-fade-in"
+          style={{
+            left: pointerPos.x,
+            top: pointerPos.y,
+            width: 24,
+            height: 24,
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+      )}
     </div>
   );
 }
