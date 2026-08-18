@@ -1,5 +1,5 @@
 export type ShapeType = "rectangle" | "ellipse" | "draw" | "text" | "sticky" | "image" | "embed" | "line" | "arrow";
-export type ToolType = ShapeType | "select" | "hand";
+export type ToolType = ShapeType | "select" | "hand" | "laser";
 
 export interface BaseShape {
   id: string;

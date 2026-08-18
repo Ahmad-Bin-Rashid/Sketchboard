@@ -19,6 +19,10 @@ export function useCursorBroadcast({
   awarenessManager,
 }: UseCursorBroadcastOptions): void {
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeTool = useWhiteboardStore((s) => s.activeTool);
+
+  const laserPointsRef = useRef<{ x: number; y: number; time: number }[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const container = viewportRef.current;
@@ -40,6 +44,23 @@ export function useCursorBroadcast({
       }, COLLABORATION.IDLE_TIMEOUT_MS);
     };
 
+    const tickLaser = () => {
+      const now = Date.now();
+      // Keep points from the last 800ms to draw a trailing laser line
+      laserPointsRef.current = laserPointsRef.current.filter(
+        (p) => now - p.time < 800
+      );
+
+      const pathData = laserPointsRef.current.map((p) => [p.x, p.y] as [number, number]);
+      awarenessManager.updateLaserPath(pathData);
+
+      if (laserPointsRef.current.length > 0) {
+        animationFrameRef.current = requestAnimationFrame(tickLaser);
+      } else {
+        animationFrameRef.current = null;
+      }
+    };
+
     const handlePointerMove = (e: PointerEvent) => {
       const { pan, zoom } = useWhiteboardStore.getState();
       const rect = container.getBoundingClientRect();
@@ -52,6 +73,13 @@ export function useCursorBroadcast({
 
       throttledBroadcast(canvasPos.x, canvasPos.y);
       resetIdleTimer();
+
+      if (activeTool === "laser") {
+        laserPointsRef.current.push({ x: canvasPos.x, y: canvasPos.y, time: Date.now() });
+        if (!animationFrameRef.current) {
+          tickLaser();
+        }
+      }
     };
 
     const handlePointerLeave = () => {
@@ -59,6 +87,13 @@ export function useCursorBroadcast({
       awarenessManager.clearCursor();
       lastX = -Infinity;
       lastY = -Infinity;
+
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      laserPointsRef.current = [];
+      awarenessManager.updateLaserPath([]);
 
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
@@ -75,10 +110,16 @@ export function useCursorBroadcast({
       container.removeEventListener("pointerleave", handlePointerLeave);
       throttledBroadcast.cancel();
 
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      awarenessManager.updateLaserPath([]);
+
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
       }
     };
-  }, [viewportRef, awarenessManager]);
+  }, [viewportRef, awarenessManager, activeTool]);
 }

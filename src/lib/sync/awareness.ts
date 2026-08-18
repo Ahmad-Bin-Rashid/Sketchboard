@@ -62,6 +62,8 @@ export interface AwarenessUserState {
   isActive: boolean;
   /** Timestamp of last activity */
   lastActiveAt: number;
+  /** Ephemeral laser pointer path */
+  laserPath?: [number, number][];
 }
 
 export interface AwarenessManagerOptions {
@@ -167,6 +169,37 @@ export class AwarenessManager {
     this.awareness.setLocalStateField("cursor", null);
   }
 
+  get clientId(): number {
+    return this.clientID;
+  }
+
+  /**
+   * Update the local user's laser pointer path.
+   */
+  updateLaserPath(path: [number, number][]): void {
+    if (this.isDisposed) return;
+    this.awareness.setLocalStateField("laserPath", path);
+  }
+
+  /**
+   * Get the local user's cursor presence object.
+   */
+  getLocalPresence(): CursorPresence | null {
+    if (this.isDisposed) return null;
+    const state = this.awareness.getStates().get(this.clientID) as AwarenessUserState;
+    if (!state || !state.user) return null;
+    return {
+      clientId: this.clientID,
+      userId: state.user.id,
+      name: state.user.name,
+      avatarUrl: state.user.avatarUrl,
+      color: state.user.color,
+      x: state.cursor?.x ?? 0,
+      y: state.cursor?.y ?? 0,
+      laserPath: state.laserPath,
+    };
+  }
+
   /**
    * Mark the local user as idle (no recent interaction).
    */
@@ -216,6 +249,7 @@ export class AwarenessManager {
           color: user.color,
           x: cursor.x,
           y: cursor.y,
+          laserPath: awarenessState.laserPath,
         });
       }
     });

@@ -67,6 +67,27 @@ export function RemoteCursors({ awarenessManager }: RemoteCursorsProps) {
       }
     }
 
+    // Sync local cursor state if a laser trail path is active
+    const localPresence = awarenessManager.getLocalPresence();
+    if (localPresence && localPresence.laserPath && localPresence.laserPath.length > 0) {
+      const existing = currentMap.get(localPresence.clientId);
+      if (existing) {
+        existing.presence = localPresence;
+        newMap.set(localPresence.clientId, existing);
+      } else {
+        const screenPos = canvasToScreen(localPresence.x, localPresence.y, pan, zoom);
+        newMap.set(localPresence.clientId, {
+          presence: localPresence,
+          smoothed: {
+            currentX: screenPos.x,
+            currentY: screenPos.y,
+            targetX: screenPos.x,
+            targetY: screenPos.y,
+          },
+        });
+      }
+    }
+
     cursorsRef.current = newMap;
 
     // Start animation loop if not already running
@@ -175,6 +196,9 @@ export function RemoteCursors({ awarenessManager }: RemoteCursorsProps) {
 
   // ─── Render ─────────────────────────────────────────────────────────
 
+  const { pan, zoom } = useWhiteboardStore();
+  const localClientId = awarenessManager.clientId;
+
   if (cursors.size === 0) return null;
 
   return (
@@ -182,16 +206,76 @@ export function RemoteCursors({ awarenessManager }: RemoteCursorsProps) {
       className="pointer-events-none absolute inset-0 z-250 overflow-hidden"
       aria-hidden="true"
     >
-      {Array.from(cursors.values()).map(({ presence, smoothed }) => (
-        <CursorAvatar
-          key={presence.clientId}
-          name={presence.name}
-          color={presence.color}
-          isActive={true}
-          x={smoothed.currentX}
-          y={smoothed.currentY}
-        />
-      ))}
+      {/* Laser Trails Overlay */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+        {Array.from(cursors.values()).map(({ presence }) => {
+          if (!presence.laserPath || presence.laserPath.length < 2) return null;
+
+          // Convert all path points from canvas space to screen space
+          const screenPoints = presence.laserPath.map(([cx, cy]) =>
+            canvasToScreen(cx, cy, pan, zoom)
+          );
+
+          return (
+            <g key={`laser-trail-${presence.clientId}`}>
+              {/* Render fading trail line segments */}
+              {screenPoints.slice(0, -1).map((p1, idx) => {
+                const p2 = screenPoints[idx + 1];
+                const opacity = (idx / (screenPoints.length - 1)) * 0.8;
+                const width = 2 + (idx / (screenPoints.length - 1)) * 4;
+                return (
+                  <line
+                    key={`laser-seg-${idx}`}
+                    x1={p1.x}
+                    y1={p1.y}
+                    x2={p2.x}
+                    y2={p2.y}
+                    stroke={presence.color}
+                    strokeWidth={width}
+                    opacity={opacity}
+                    strokeLinecap="round"
+                  />
+                );
+              })}
+              {/* Render glowing pulse highlight at the tip of the trail */}
+              {screenPoints.length > 0 && (
+                <>
+                  <circle
+                    cx={screenPoints[screenPoints.length - 1].x}
+                    cy={screenPoints[screenPoints.length - 1].y}
+                    r={5}
+                    fill={presence.color}
+                    opacity={0.9}
+                  />
+                  <circle
+                    cx={screenPoints[screenPoints.length - 1].x}
+                    cy={screenPoints[screenPoints.length - 1].y}
+                    r={10}
+                    fill={presence.color}
+                    opacity={0.35}
+                    className="animate-ping"
+                    style={{ animationDuration: "2s" }}
+                  />
+                </>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Cursor Avatars (excluding self) */}
+      {Array.from(cursors.values())
+        .filter(({ presence }) => presence.clientId !== localClientId)
+        .map(({ presence, smoothed }) => (
+          <CursorAvatar
+            key={presence.clientId}
+            name={presence.name}
+            color={presence.color}
+            isActive={true}
+            x={smoothed.currentX}
+            y={smoothed.currentY}
+          />
+        ))}
     </div>
   );
 }

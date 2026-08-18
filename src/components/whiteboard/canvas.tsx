@@ -94,7 +94,12 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       }
 
       // 3. Shape Creation Mode
-      if (activeTool !== "select" && e.button === 0 && isCanvasBackground) {
+      const isShapeTool =
+        activeTool !== "select" &&
+        activeTool !== "hand" &&
+        activeTool !== "laser";
+
+      if (isShapeTool && e.button === 0 && isCanvasBackground) {
         const rect = viewportRef.current.getBoundingClientRect();
         const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
         dragStartRef.current = canvasPos;
@@ -485,7 +490,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         target.classList.contains("canvas-viewport") ||
         target.classList.contains("board-container");
 
-      if (isCanvasBackground && shapesMap && viewportRef.current) {
+      if (activeTool === "select" && isCanvasBackground && shapesMap && viewportRef.current) {
         const rect = viewportRef.current.getBoundingClientRect();
         const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
 
@@ -520,7 +525,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         setSelectedShapeIds([id]);
       }
     },
-    [shapesMap, pan, zoom, shapes, setActiveTool, setSelectedShapeIds, viewportRef]
+    [shapesMap, pan, zoom, shapes, activeTool, setActiveTool, setSelectedShapeIds, viewportRef]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -570,7 +575,13 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       className="canvas-viewport relative h-full w-full overflow-hidden select-none"
       style={{
         touchAction: "none",
-        cursor: isPanning ? "grabbing" : activeTool === "hand" ? "grab" : "default",
+        cursor: isPanning
+          ? "grabbing"
+          : activeTool === "hand"
+          ? "grab"
+          : activeTool === "laser"
+          ? "crosshair"
+          : "default",
         background: "var(--background)",
       }}
       onPointerDown={handlePointerDown}
