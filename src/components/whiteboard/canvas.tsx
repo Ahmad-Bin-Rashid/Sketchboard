@@ -44,8 +44,6 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia, delet
   const { resolvedTheme } = useTheme();
   const defaultStrokeColor = resolvedTheme === "dark" ? "#ffffff" : "#1c1917";
 
-  console.log("[Canvas] Rendered. Zoom:", zoom, "Pan:", pan);
-
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   const dragStartRef = useRef({ x: 0, y: 0 });
