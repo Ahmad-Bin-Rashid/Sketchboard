@@ -23,11 +23,9 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Download,
   Home,
   Pencil,
   Share2,
-  Upload,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -37,8 +35,8 @@ import { cn } from "@/lib/utils";
 import { ActiveUsersPanel } from "./active-users-panel";
 import type { CollaboratorInfo, UserRole } from "@/types";
 import type { WhiteboardMode } from "@/hooks/use-yjs-sync";
-import type { Editor } from "tldraw";
-import { exportBoardAsFile, openImportFilePicker, type ImportResult } from "@/lib/board-export";
+import type { CustomShape } from "@/types/whiteboard";
+import * as Y from "yjs";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,8 +49,8 @@ interface BoardHeaderProps {
   mode?: WhiteboardMode;
   /** Auth mode: user's role on this board */
   role?: UserRole;
-  /** tldraw editor — needed for export/import (guest mode) */
-  editor?: Editor | null;
+  /** Custom canvas shapes map for synchronization */
+  shapesMap: Y.Map<CustomShape> | null;
   /** Guest mode: the current guest's display name, shown in identity chip */
   guestName?: string;
   /** Called when the user changes the board name (guest mode inline rename) */
@@ -71,7 +69,7 @@ export function BoardHeader({
   collaborators = [],
   mode = "guest",
   role,
-  editor,
+  shapesMap,
   guestName,
   onRename,
   onChangeName,
@@ -88,34 +86,11 @@ export function BoardHeader({
   // Share copy feedback
   const [copied, setCopied] = useState(false);
 
-  // Import feedback toast
-  const [importMsg, setImportMsg] = useState<string | null>(null);
-
   const handleShare = useCallback(() => {
     navigator.clipboard.writeText(`${window.location.origin}/board/${boardId}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [boardId]);
-
-  const handleExport = useCallback(() => {
-    if (!editor) return;
-    exportBoardAsFile(editor, boardId, boardName);
-  }, [editor, boardId, boardName]);
-
-  const handleImport = useCallback(() => {
-    if (!editor) return;
-    openImportFilePicker(editor, (result: ImportResult) => {
-      if (result.ok) {
-        setImportMsg("Board imported!");
-        if (result.boardName && onRename) {
-          onRename(result.boardName);
-        }
-      } else {
-        setImportMsg(result.error ?? "Import failed");
-      }
-      setTimeout(() => setImportMsg(null), 3000);
-    });
-  }, [editor, onRename]);
 
   const handleNameDoubleClick = () => {
     if (!canRename) return;
@@ -200,41 +175,7 @@ export function BoardHeader({
 
       {/* ─── Right: Actions + Collaborators + Status ─────────── */}
       <div className="pointer-events-auto flex items-center gap-2">
-        {/* Import feedback toast */}
-        {importMsg && (
-          <div
-            className="rounded-lg bg-card px-3 py-1.5 text-xs text-foreground shadow-sm"
-            style={{ border: "1px solid var(--panel-border)" }}
-          >
-            {importMsg}
-          </div>
-        )}
 
-        {/* Guest: Import + Export */}
-        {isGuest && editor && (
-          <>
-            <button
-              onClick={handleImport}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-panel-bg px-3 text-xs text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-surface-hover"
-              style={{ border: "1px solid var(--panel-border)" }}
-              title="Import .whiteboard file"
-              aria-label="Import board"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              Import
-            </button>
-            <button
-              onClick={handleExport}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-panel-bg px-3 text-xs text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-surface-hover"
-              style={{ border: "1px solid var(--panel-border)" }}
-              title="Export as .whiteboard file"
-              aria-label="Export board"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Save
-            </button>
-          </>
-        )}
 
         {/* Connection status pill */}
         <div

@@ -1,0 +1,168 @@
+import { useEffect, useRef } from "react";
+import * as Y from "yjs";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
+import type { CustomShape } from "@/types/whiteboard";
+import { removeShapes, saveShape, triggerMediaUpload } from "@/lib/board-actions";
+
+export function useWhiteboardKeyboard(
+  shapesMap: Y.Map<CustomShape> | null,
+  uploadMedia: (file: File) => Promise<string>,
+  deleteMedia: (urls: string[]) => Promise<void>,
+  viewportRef: React.RefObject<HTMLDivElement | null>,
+  mode: "guest" | "auth",
+  boardId: string
+) {
+  const shapesMapRef = useRef<Y.Map<CustomShape> | null>(shapesMap);
+
+  useEffect(() => {
+    shapesMapRef.current = shapesMap;
+  }, [shapesMap]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Guard: do not trigger when user is typing in input or textareas
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement ||
+        (document.activeElement instanceof HTMLElement &&
+          document.activeElement.isContentEditable)
+      ) {
+        return;
+      }
+
+      const {
+        selectedShapeIds,
+        shapes,
+        setSelectedShapeIds,
+        clearSelection,
+        setActiveTool,
+        activeTool,
+      } = useWhiteboardStore.getState();
+
+      const isMac =
+        typeof window !== "undefined" &&
+        /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+      const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+      // 1. Delete / Backspace
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedShapeIds.length > 0 && shapesMapRef.current) {
+          e.preventDefault();
+          removeShapes(shapesMapRef.current, boardId, selectedShapeIds, deleteMedia);
+          setSelectedShapeIds([]);
+        }
+      }
+
+      // 2. Escape
+      if (e.key === "Escape") {
+        e.preventDefault();
+        clearSelection();
+        setActiveTool("select");
+      }
+
+      // 3. Ctrl/Cmd + A (Select All)
+      if (isCmdOrCtrl && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setSelectedShapeIds(Object.keys(shapes));
+      }
+
+      // Ctrl/Cmd + U (Upload Media)
+      if (isCmdOrCtrl && e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        if (viewportRef) {
+          triggerMediaUpload({
+            shapesMap: shapesMapRef.current,
+            shapes,
+            boardId,
+            uploadMedia,
+            viewportRef,
+            setSelectedShapeIds,
+            mode: mode || "guest",
+          });
+        }
+      }
+
+      // 5. Tool Selection Shortcuts (S, R, O, D, T, N, L, A, H)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const key = e.key.toLowerCase();
+        if (key === "s") {
+          e.preventDefault();
+          setActiveTool("select");
+        } else if (key === "r") {
+          e.preventDefault();
+          setActiveTool("rectangle");
+        } else if (key === "o") {
+          e.preventDefault();
+          setActiveTool("ellipse");
+        } else if (key === "d") {
+          e.preventDefault();
+          setActiveTool("draw");
+        } else if (key === "t") {
+          e.preventDefault();
+          setActiveTool("text");
+        } else if (key === "n") {
+          e.preventDefault();
+          setActiveTool("sticky");
+        } else if (key === "l") {
+          e.preventDefault();
+          setActiveTool("line");
+        } else if (key === "a") {
+          e.preventDefault();
+          setActiveTool("arrow");
+        } else if (key === "h") {
+          e.preventDefault();
+          setActiveTool(activeTool === "hand" ? "select" : "hand");
+        } else if (key === "f") {
+          e.preventDefault();
+          setActiveTool("frame");
+        } else if (key === "e") {
+          e.preventDefault();
+          setActiveTool("eraser");
+        }
+      }
+
+      // 4. Arrow keys (Nudge selected shapes)
+      if (
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) &&
+        selectedShapeIds.length > 0 &&
+        shapesMapRef.current
+      ) {
+        e.preventDefault();
+        const nudgeAmount = e.shiftKey ? 10 : 1;
+        let dx = 0;
+        let dy = 0;
+
+        if (e.key === "ArrowLeft") dx = -nudgeAmount;
+        if (e.key === "ArrowRight") dx = nudgeAmount;
+        if (e.key === "ArrowUp") dy = -nudgeAmount;
+        if (e.key === "ArrowDown") dy = nudgeAmount;
+
+        const currentMap = shapesMapRef.current;
+        const storeShapes = useWhiteboardStore.getState().shapes;
+        selectedShapeIds.forEach((id) => {
+          const current = storeShapes[id];
+          if (current) {
+            const updated = {
+              ...current,
+              x: current.x + dx,
+              y: current.y + dy,
+            } as CustomShape;
+
+            if (updated.type === "draw" && current.type === "draw") {
+              updated.points = current.points.map(([px, py, pr]) => [
+                px + dx,
+                py + dy,
+                pr,
+              ]);
+            }
+
+            saveShape(currentMap, boardId, updated);
+          }
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+}

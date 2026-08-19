@@ -69,6 +69,7 @@ export interface CursorPresence {
   color: string;
   x: number;
   y: number;
+  laserPath?: [number, number][];
 }
 
 export interface CollaboratorInfo {
@@ -156,3 +157,6 @@ export interface TeamMemberWithUser {
     avatarUrl: string | null;
   };
 }
+
+export * from "./whiteboard";
+

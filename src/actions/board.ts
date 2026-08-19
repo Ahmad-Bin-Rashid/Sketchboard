@@ -369,7 +369,18 @@ export async function deleteBoard(boardId: string): Promise<ActionResult<void>> 
     await db.delete(boardAssets).where(eq(boardAssets.boardId, boardId));
   }
 
-  // 3. Delete the board
+  // 3. Delete Liveblocks room
+  try {
+    const { Liveblocks } = await import("@liveblocks/node");
+    const liveblocksClient = new Liveblocks({
+      secret: process.env.LIVEBLOCKS_SECRET_KEY!,
+    });
+    await liveblocksClient.deleteRoom(boardId);
+  } catch (err) {
+    console.error("[deleteBoard] Failed to delete room from Liveblocks:", err);
+  }
+
+  // 4. Delete the board
   await db.delete(boards).where(eq(boards.id, boardId));
 
   revalidatePath(ROUTES.HOME);

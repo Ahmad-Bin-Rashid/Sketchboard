@@ -51,3 +51,28 @@ export function formatRelativeTime(date: Date | string | null | undefined): stri
 
   return d.toLocaleDateString("en-US", options);
 }
+
+/**
+ * Dynamic color translation based on the active local theme.
+ * Interchange black and white colors to guarantee proper visibility:
+ * - In dark mode, raw black colors render as white.
+ * - In light mode, raw white colors render as black.
+ */
+export function getThemeColor(
+  color: string | undefined,
+  theme: "light" | "dark" | string | undefined
+): string | undefined {
+  if (!color) return color;
+
+  const isBlack = color === "#1c1917" || color === "#000000" || color === "black";
+  const isWhite = color === "#ffffff" || color === "white" || color === "#fff";
+
+  if (theme === "dark") {
+    if (isBlack) return "#ffffff";
+  } else {
+    // Default to light mode behavior
+    if (isWhite) return "#1c1917";
+  }
+  return color;
+}
+

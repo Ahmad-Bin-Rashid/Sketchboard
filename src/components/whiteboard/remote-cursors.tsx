@@ -1,37 +1,19 @@
 "use client";
 
-/**
- * RemoteCursors — overlay layer that renders all connected users' cursors.
- *
- * Architecture:
- * - Sits as a full-screen overlay above the tldraw canvas
- * - pointer-events: none so it doesn't block canvas interaction
- * - Subscribes to the awareness manager for remote cursor positions
- * - Uses requestAnimationFrame for smooth cursor interpolation
- * - Converts page coordinates → viewport coordinates each frame
- *
- * Performance:
- * - Memoized CursorAvatar components prevent unnecessary child re-renders
- * - SmoothedCursor interpolation runs at display refresh rate
- * - Stale cursors (user left) are cleaned up immediately by awareness protocol
- */
-
 import { useEffect, useRef, useCallback, useState } from "react";
-import type { Editor } from "tldraw";
 import type { AwarenessManager } from "@/lib/sync/awareness";
 import type { CursorPresence } from "@/types";
 import {
-  pageToScreen,
   updateSmoothedCursor,
   type SmoothedCursor,
 } from "@/lib/sync/cursor-manager";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { canvasToScreen } from "@/lib/coordinate-helpers";
 import { CursorAvatar } from "./cursor-avatar";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface RemoteCursorsProps {
-  /** tldraw editor instance for coordinate transforms */
-  editor: Editor;
   /** Awareness manager providing remote user data */
   awarenessManager: AwarenessManager;
 }
@@ -44,7 +26,7 @@ interface CursorState {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) {
+export function RemoteCursors({ awarenessManager }: RemoteCursorsProps) {
   const [cursors, setCursors] = useState<Map<number, CursorState>>(new Map());
   const cursorsRef = useRef<Map<number, CursorState>>(new Map());
   const rafRef = useRef<number | null>(null);
@@ -58,22 +40,44 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
     const { cursors: remoteCursors } = awarenessManager.getRemoteUsers();
     const currentMap = cursorsRef.current;
     const newMap = new Map<number, CursorState>();
+    const { pan, zoom } = useWhiteboardStore.getState();
 
     for (const presence of remoteCursors) {
       const existing = currentMap.get(presence.clientId);
 
       if (existing) {
         // Update target position and presence info
-        const screenPos = pageToScreen(editor, presence.x, presence.y);
+        const screenPos = canvasToScreen(presence.x, presence.y, pan, zoom);
         existing.presence = presence;
         existing.smoothed.targetX = screenPos.x;
         existing.smoothed.targetY = screenPos.y;
         newMap.set(presence.clientId, existing);
       } else {
         // New cursor — start at target position (no initial lerp)
-        const screenPos = pageToScreen(editor, presence.x, presence.y);
+        const screenPos = canvasToScreen(presence.x, presence.y, pan, zoom);
         newMap.set(presence.clientId, {
           presence,
+          smoothed: {
+            currentX: screenPos.x,
+            currentY: screenPos.y,
+            targetX: screenPos.x,
+            targetY: screenPos.y,
+          },
+        });
+      }
+    }
+
+    // Sync local cursor state if a laser trail path is active
+    const localPresence = awarenessManager.getLocalPresence();
+    if (localPresence && localPresence.laserPath && localPresence.laserPath.length > 0) {
+      const existing = currentMap.get(localPresence.clientId);
+      if (existing) {
+        existing.presence = localPresence;
+        newMap.set(localPresence.clientId, existing);
+      } else {
+        const screenPos = canvasToScreen(localPresence.x, localPresence.y, pan, zoom);
+        newMap.set(localPresence.clientId, {
+          presence: localPresence,
           smoothed: {
             currentX: screenPos.x,
             currentY: screenPos.y,
@@ -96,8 +100,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
       stopAnimationLoop();
       setCursors(new Map());
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, awarenessManager]);
+  }, [awarenessManager]);
 
   /**
    * Animation loop — interpolates all cursors toward their targets
@@ -113,7 +116,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
     // Update React state for re-render
     setCursors(new Map(map));
 
-    // Keep looping while there are any cursors (drawing = constant updates)
+    // Keep looping while there are any cursors
     if (map.size > 0) {
       rafRef.current = requestAnimationFrame(animate);
     } else {
@@ -137,17 +140,19 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
 
   /**
    * Also update screen positions when the camera changes (zoom/pan).
-   * tldraw's camera transform affects pageToScreen conversion.
    */
   const updateScreenPositions = useCallback(() => {
     const map = cursorsRef.current;
     if (map.size === 0) return;
 
+    const { pan, zoom } = useWhiteboardStore.getState();
+
     map.forEach((state) => {
-      const screenPos = pageToScreen(
-        editor,
+      const screenPos = canvasToScreen(
         state.presence.x,
-        state.presence.y
+        state.presence.y,
+        pan,
+        zoom
       );
       state.smoothed.targetX = screenPos.x;
       state.smoothed.targetY = screenPos.y;
@@ -157,7 +162,7 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
     });
 
     setCursors(new Map(map));
-  }, [editor]);
+  }, []);
 
   // Subscribe to awareness changes
   useEffect(() => {
@@ -169,17 +174,18 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
 
   // Subscribe to camera changes for coordinate re-projection
   useEffect(() => {
-    const unsubscribe = editor.store.listen(
-      () => {
+    let lastPan = useWhiteboardStore.getState().pan;
+    let lastZoom = useWhiteboardStore.getState().zoom;
+
+    const unsubscribe = useWhiteboardStore.subscribe((state) => {
+      if (state.pan !== lastPan || state.zoom !== lastZoom) {
+        lastPan = state.pan;
+        lastZoom = state.zoom;
         updateScreenPositions();
-      },
-      {
-        source: "all",
-        scope: "session",
       }
-    );
+    });
     return unsubscribe;
-  }, [editor, updateScreenPositions]);
+  }, [updateScreenPositions]);
 
   // Cleanup animation loop on unmount
   useEffect(() => {
@@ -190,6 +196,9 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
 
   // ─── Render ─────────────────────────────────────────────────────────
 
+  const { pan, zoom } = useWhiteboardStore();
+  const localClientId = awarenessManager.clientId;
+
   if (cursors.size === 0) return null;
 
   return (
@@ -197,16 +206,76 @@ export function RemoteCursors({ editor, awarenessManager }: RemoteCursorsProps) 
       className="pointer-events-none absolute inset-0 z-250 overflow-hidden"
       aria-hidden="true"
     >
-      {Array.from(cursors.values()).map(({ presence, smoothed }) => (
-        <CursorAvatar
-          key={presence.clientId}
-          name={presence.name}
-          color={presence.color}
-          isActive={true}
-          x={smoothed.currentX}
-          y={smoothed.currentY}
-        />
-      ))}
+      {/* Laser Trails Overlay */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+        {Array.from(cursors.values()).map(({ presence }) => {
+          if (!presence.laserPath || presence.laserPath.length < 2) return null;
+
+          // Convert all path points from canvas space to screen space
+          const screenPoints = presence.laserPath.map(([cx, cy]) =>
+            canvasToScreen(cx, cy, pan, zoom)
+          );
+
+          return (
+            <g key={`laser-trail-${presence.clientId}`}>
+              {/* Render fading trail line segments */}
+              {screenPoints.slice(0, -1).map((p1, idx) => {
+                const p2 = screenPoints[idx + 1];
+                const opacity = (idx / (screenPoints.length - 1)) * 0.8;
+                const width = 2 + (idx / (screenPoints.length - 1)) * 4;
+                return (
+                  <line
+                    key={`laser-seg-${idx}`}
+                    x1={p1.x}
+                    y1={p1.y}
+                    x2={p2.x}
+                    y2={p2.y}
+                    stroke={presence.color}
+                    strokeWidth={width}
+                    opacity={opacity}
+                    strokeLinecap="round"
+                  />
+                );
+              })}
+              {/* Render glowing pulse highlight at the tip of the trail */}
+              {screenPoints.length > 0 && (
+                <>
+                  <circle
+                    cx={screenPoints[screenPoints.length - 1].x}
+                    cy={screenPoints[screenPoints.length - 1].y}
+                    r={5}
+                    fill={presence.color}
+                    opacity={0.9}
+                  />
+                  <circle
+                    cx={screenPoints[screenPoints.length - 1].x}
+                    cy={screenPoints[screenPoints.length - 1].y}
+                    r={10}
+                    fill={presence.color}
+                    opacity={0.35}
+                    className="animate-ping"
+                    style={{ animationDuration: "2s" }}
+                  />
+                </>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Cursor Avatars (excluding self) */}
+      {Array.from(cursors.values())
+        .filter(({ presence }) => presence.clientId !== localClientId)
+        .map(({ presence, smoothed }) => (
+          <CursorAvatar
+            key={presence.clientId}
+            name={presence.name}
+            color={presence.color}
+            isActive={true}
+            x={smoothed.currentX}
+            y={smoothed.currentY}
+          />
+        ))}
     </div>
   );
 }

@@ -30,6 +30,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Georgia&family=Inter:wght@400;600;700&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Shantell+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet" />
         <script
           dangerouslySetInnerHTML={{
             __html: `

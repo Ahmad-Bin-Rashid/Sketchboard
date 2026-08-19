@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Main Whiteboard component — wraps tldraw with real-time collaboration.
+ * Main Whiteboard component — wraps custom canvas with real-time collaboration.
  *
  * Supports two modes:
  *
@@ -14,44 +14,32 @@
  *
  * Auth mode ("auth"):
  * - Real userId/userName/avatarUrl from Clerk session (passed via props)
- * - Board state persisted to DB via PartyKit (Phase 8)
+ * - Board state persisted to DB
  * - Full dashboard access
  * - Images: uploaded to Uploadthing CDN, recorded in DB
- *
- * Architecture:
- * ┌───────────────────────────────────────────────────────┐
- * │  Whiteboard (this component)                          │
- * │  ├── GuestNameModal (guest, first visit only)         │
- * │  ├── Tldraw (full screen canvas, z-0)                 │
- * │  │    └── assetStore (guest=base64 / auth=CDN)        │
- * │  ├── RemoteCursors (overlay, z-250)                   │
- * │  │    └── CursorAvatar × N (per remote user)          │
- * │  ├── BoardHeader (floating, z-200)                    │
- * │  │    └── ActiveUsersPanel (stacked avatars)          │
- * │  ├── UploadToastManager (bottom-right, z-300)         │
- * │  └── ConnectionIndicator (floating, z-200)            │
- * └───────────────────────────────────────────────────────┘
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { Tldraw, type Editor } from "tldraw";
-import "tldraw/tldraw.css";
-import { nanoid } from "nanoid";
+import { useCallback, useEffect, useState, useRef } from "react";
 
-import { useYjsSync, type WhiteboardMode } from "@/hooks/use-yjs-sync";
-import { useCursorBroadcast } from "@/hooks/use-cursor-broadcast";
-import { useActiveUsers } from "@/hooks/use-active-users";
+import { useYjsSync, useUndoRedo, useCursorBroadcast, useActiveUsers, type WhiteboardMode } from "@/hooks";
 import { getGuestIdentity, hasSetGuestName } from "@/lib/guest";
 import { renameGuestBoard, getGuestBoardMeta } from "@/lib/local-board-store";
 import { renameBoard } from "@/actions/board";
 import type { UserRole } from "@/types";
 import { useAssetStore } from "@/lib/assets";
-import { useTheme } from "@/components/theme-provider";
+import { useWhiteboardKeyboard } from "@/hooks/use-whiteboard-keyboard";
 import { BoardHeader } from "./board-header";
 import { ConnectionIndicator } from "./connection-indicator";
+import { ZoomIndicator } from "./zoom-indicator";
 import { RemoteCursors } from "./remote-cursors";
 import { GuestNameModal } from "./guest-name-modal";
 import { UploadToastManager, type ToastEntry } from "./upload-toast";
+import { Canvas } from "./canvas";
+import { Toolbar } from "./toolbar";
+import { CommandBar } from "./command-bar";
+import { StylePanel } from "./style-panel";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { useTheme } from "@/components/theme-provider";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,10 +69,6 @@ export function Whiteboard({
   avatarUrl,
   role,
 }: WhiteboardProps) {
-  const { theme } = useTheme();
-  const [editor, setEditor] = useState<Editor | null>(null);
-
-  // Board name can be changed inline by guests
   const [boardName, setBoardName] = useState(initialBoardName);
 
   // Guest identity — loaded from localStorage (client-side only)
@@ -98,13 +82,7 @@ export function Whiteboard({
   // Upload toasts — shown in auth mode when images are uploaded
   const [uploadToasts, setUploadToasts] = useState<ToastEntry[]>([]);
 
-  // Load guest identity on client mount
-  useEffect(() => {
-    console.log("[Whiteboard] Component MOUNTED. boardId:", boardId, "mode:", mode);
-    return () => {
-      console.log("[Whiteboard] Component UNMOUNTED. boardId:", boardId, "mode:", mode);
-    };
-  }, [boardId, mode]);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (mode !== "guest") return;
@@ -156,14 +134,12 @@ export function Whiteboard({
     setUploadToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // ─── Asset store — tldraw image upload backend ────────────────────────
+  // ─── Asset store — image upload backend ────────────────────────
 
-  const assetStore = useAssetStore({
+  const { uploadMedia, deleteMedia } = useAssetStore({
     mode,
     boardId,
-    editor,
     onUploadStart: (id, fileName) => {
-      // Only show toasts in auth mode (guest mode is instant base64)
       if (mode === "auth") addToast(id, fileName);
     },
     onUploadProgress: (id, progress) => {
@@ -173,13 +149,11 @@ export function Whiteboard({
       if (mode === "auth") updateToastSuccess(id);
     },
     onUploadError: (id, error) => {
-      // Show error toast in both modes
       setUploadToasts((prev) => {
         const exists = prev.find((t) => t.id === id);
         if (exists) {
           return prev.map((t) => (t.id === id ? { ...t, status: "error" as const, error } : t));
         }
-        // Guest mode: add a new error toast
         return [...prev, { id, fileName: "Image", status: "error" as const, error }];
       });
     },
@@ -194,9 +168,8 @@ export function Whiteboard({
 
   // ─── Real-time collaboration sync ────────────────────────────────────
 
-  const { awarenessManager, connectionStatus, peerCount } = useYjsSync({
+  const { shapesMap, undoManager, awarenessManager, connectionStatus, peerCount } = useYjsSync({
     boardId,
-    editor,
     userId: effectiveUserId,
     userName: effectiveUserName,
     avatarUrl: effectiveAvatarUrl,
@@ -206,76 +179,19 @@ export function Whiteboard({
     boardName,
   });
 
-  useCursorBroadcast({ editor, awarenessManager });
+  const { resolvedTheme } = useTheme();
+
+
+  // Keyboard Shortcuts Hook
+  useWhiteboardKeyboard(shapesMap, uploadMedia, deleteMedia, viewportRef, mode, boardId);
+  const undoRedoState = useUndoRedo(undoManager);
+
+  const focusMode = useWhiteboardStore((s) => s.focusMode);
+
+  // Cursor Broadcast Hook
+  useCursorBroadcast({ viewportRef, awarenessManager });
 
   const { collaborators } = useActiveUsers(awarenessManager);
-
-  // ─── Editor mount ────────────────────────────────────────────────────
-
-  const handleMount = useCallback(
-    (mountedEditor: Editor) => {
-      setEditor(mountedEditor);
-      mountedEditor.updateInstanceState({ isFocused: true });
-
-      if (process.env.NODE_ENV === "development") {
-        (window as unknown as Record<string, unknown>).__tldraw_editor = mountedEditor;
-        console.log(`[Whiteboard] Mounted — board: ${boardId}, mode: ${mode}`);
-      }
-    },
-    [boardId, mode]
-  );
-
-  // Migrate any local storage assets that have been uploaded to Uploadthing
-  useEffect(() => {
-    if (!editor || mode !== "auth") return;
-
-    const migrateAssets = () => {
-      try {
-        const mappingsStr = localStorage.getItem("sketchboard-media-mappings");
-        if (!mappingsStr) return;
-        const mappings = JSON.parse(mappingsStr) as Record<string, string>;
-
-        const assets = editor.getAssets();
-        const assetsToUpdate: any[] = [];
-
-        for (const asset of assets) {
-          const cloudUrl = mappings[asset.id];
-          if (cloudUrl && asset.props && "src" in asset.props && typeof asset.props.src === "string" && asset.props.src.startsWith("data:")) {
-            assetsToUpdate.push({
-              id: asset.id,
-              type: asset.type,
-              props: {
-                ...asset.props,
-                src: cloudUrl,
-              },
-            });
-          }
-        }
-
-        if (assetsToUpdate.length > 0) {
-          console.log("[Whiteboard] Migrating local assets to cloud URLs:", assetsToUpdate);
-          editor.updateAssets(assetsToUpdate);
-        }
-      } catch (err) {
-        console.warn("[Whiteboard] Failed to migrate local assets:", err);
-      }
-    };
-
-    // Run after a short delay to allow collaborative synchronization to load
-    const timeoutId = setTimeout(migrateAssets, 2000);
-    return () => clearTimeout(timeoutId);
-  }, [editor, mode]);
-
-  // Sync theme changes to the tldraw editor preferences
-  useEffect(() => {
-    if (editor) {
-      editor.user.updateUserPreferences({
-        colorScheme: theme,
-      });
-    }
-  }, [editor, theme]);
-
-  // ─── Event handlers ──────────────────────────────────────────────────
 
   const handleNameConfirmed = useCallback((name: string, color: string) => {
     setGuestName(name);
@@ -305,10 +221,31 @@ export function Whiteboard({
     [boardId, mode, boardName]
   );
 
-  // ─── Render ──────────────────────────────────────────────────────────
-
   return (
     <div className="relative h-screen w-screen">
+      {/* Room Full Overlay */}
+      {connectionStatus === "full" && (
+        <div className="absolute inset-0 z-500 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
+          <div className="max-w-md rounded-2xl border bg-card p-6 shadow-xl text-center flex flex-col items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center animate-bounce">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-foreground">Room is Full</h2>
+            <p className="text-sm text-muted-foreground">
+              This whiteboard has reached its peak connection limit of 10 users. Please wait for someone to leave before joining.
+            </p>
+            <button
+              onClick={() => window.location.href = "/"}
+              className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Screen rotation prompt overlay for mobile portrait */}
       <div className="portrait-rotate-overlay select-none flex-col gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-light text-primary animate-bounce">
@@ -328,44 +265,82 @@ export function Whiteboard({
         <GuestNameModal onConfirm={handleNameConfirmed} />
       )}
 
-      {/* tldraw canvas — full screen */}
+      {/* Custom DOM canvas */}
       <div className="absolute inset-0 z-0">
-        <Tldraw
-          onMount={handleMount}
-          autoFocus
-          assets={assetStore}
+        <Canvas
+          shapesMap={shapesMap}
+          undoManager={undoManager}
+          viewportRef={viewportRef}
+          uploadMedia={uploadMedia}
+          deleteMedia={deleteMedia}
+          boardId={boardId}
         />
       </div>
 
       {/* Remote cursors overlay */}
-      {editor && awarenessManager && (
-        <RemoteCursors editor={editor} awarenessManager={awarenessManager} />
+      {awarenessManager && (
+        <RemoteCursors awarenessManager={awarenessManager} />
       )}
 
       {/* Board header */}
-      <BoardHeader
+      {!focusMode && (
+        <BoardHeader
+          boardId={boardId}
+          boardName={boardName}
+          peerCount={peerCount}
+          connectionStatus={connectionStatus}
+          collaborators={collaborators}
+          mode={mode}
+          role={role}
+          shapesMap={shapesMap}
+          guestName={mode === "guest" ? guestName : undefined}
+          onRename={handleBoardRename}
+          onChangeName={mode === "guest" ? () => setShowNameModal(true) : undefined}
+        />
+      )}
+
+      {/* Floating Command Bar (top-center) */}
+      <CommandBar
+        shapesMap={shapesMap}
+        canUndo={undoRedoState.canUndo}
+        canRedo={undoRedoState.canRedo}
+        undo={undoRedoState.undo}
+        redo={undoRedoState.redo}
+        viewportRef={viewportRef}
         boardId={boardId}
         boardName={boardName}
-        peerCount={peerCount}
-        connectionStatus={connectionStatus}
-        collaborators={collaborators}
-        mode={mode}
-        role={role}
-        editor={editor}
-        guestName={mode === "guest" ? guestName : undefined}
         onRename={handleBoardRename}
-        onChangeName={mode === "guest" ? () => setShowNameModal(true) : undefined}
+        deleteMedia={deleteMedia}
       />
+
+      {/* Main floating pill toolbar */}
+      {!focusMode && (
+        <Toolbar
+          shapesMap={shapesMap}
+          viewportRef={viewportRef}
+          uploadMedia={uploadMedia}
+          mode={mode}
+          boardId={boardId}
+        />
+      )}
+
+      {/* Right-side style panel */}
+      {!focusMode && <StylePanel shapesMap={shapesMap} boardId={boardId} />}
 
       {/* Upload progress toasts — bottom-right, above toolbar */}
       <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />
 
-      {/* Connection indicator — bottom-left */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[200]">
-        <div className="pointer-events-auto">
-          <ConnectionIndicator />
+      {/* Connection and Zoom indicators — bottom-left */}
+      {!focusMode && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-200 flex items-center gap-2">
+          <div className="pointer-events-auto">
+            <ZoomIndicator viewportRef={viewportRef} />
+          </div>
+          <div className="pointer-events-auto">
+            <ConnectionIndicator />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

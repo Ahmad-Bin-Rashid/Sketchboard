@@ -13,7 +13,7 @@
  * - Max single board snapshot: ~2MB recommended
  */
 
-import type { TLEditorSnapshot } from "tldraw";
+import type { CustomShape } from "@/types/whiteboard";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -93,20 +93,20 @@ export function getGuestStorageUsage(): number {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Save a tldraw store snapshot for a guest board.
+ * Save a custom whiteboard shape list for a guest board.
  * Returns a SaveResult indicating whether the operation succeeded
  * and whether the user is approaching or over storage limits.
  */
 export function saveGuestBoard(
   boardId: string,
-  snapshot: TLEditorSnapshot,
+  shapes: CustomShape[],
   boardName = "Untitled Board"
 ): SaveResult {
   if (typeof window === "undefined") {
     return { ok: false, status: "blocked", usedBytes: 0 };
   }
 
-  const serialized = JSON.stringify(snapshot);
+  const serialized = JSON.stringify(shapes);
   const serializedBytes = serialized.length * 2;
 
   const currentUsage = getGuestStorageUsage();
@@ -134,15 +134,15 @@ export function saveGuestBoard(
 }
 
 /**
- * Load a tldraw store snapshot from localStorage.
+ * Load a custom whiteboard shape list from localStorage.
  * Returns null if no saved state exists for this board.
  */
-export function loadGuestBoard(boardId: string): TLEditorSnapshot | null {
+export function loadGuestBoard(boardId: string): CustomShape[] | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(BOARD_KEY_PREFIX + boardId);
     if (!raw) return null;
-    return JSON.parse(raw) as TLEditorSnapshot;
+    return JSON.parse(raw) as CustomShape[];
   } catch {
     return null;
   }

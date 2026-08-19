@@ -18,7 +18,6 @@
  *   awareness state (page coords) → pageToScreen() → CSS transform on cursor element
  */
 
-import type { Editor } from "tldraw";
 import { COLLABORATION } from "@/lib/constants";
 
 // ─── Throttle ────────────────────────────────────────────────────────────────
@@ -74,39 +73,6 @@ export function throttle<T extends (...args: never[]) => void>(
   return throttled;
 }
 
-// ─── Coordinate Transforms ──────────────────────────────────────────────────
-
-/**
- * Convert screen (viewport) coordinates to page (canvas) coordinates.
- *
- * Used when broadcasting local cursor position: the pointermove event
- * gives us screen coords, but we need to store page coords so remote
- * users see the cursor at the correct position regardless of their zoom/pan.
- */
-export function screenToPage(
-  editor: Editor,
-  screenX: number,
-  screenY: number
-): { x: number; y: number } {
-  const point = editor.screenToPage({ x: screenX, y: screenY });
-  return { x: point.x, y: point.y };
-}
-
-/**
- * Convert page (canvas) coordinates to screen (viewport) coordinates.
- *
- * Used when rendering remote cursors: their positions are stored in
- * page coords, but we need screen coords for CSS positioning.
- */
-export function pageToScreen(
-  editor: Editor,
-  pageX: number,
-  pageY: number
-): { x: number; y: number } {
-  const point = editor.pageToViewport({ x: pageX, y: pageY });
-  return { x: point.x, y: point.y };
-}
-
 // ─── Interpolation ──────────────────────────────────────────────────────────
 
 /**
@@ -159,46 +125,3 @@ export function updateSmoothedCursor(
   return true;
 }
 
-// ─── Cursor Broadcast ───────────────────────────────────────────────────────
-
-/**
- * Create a throttled cursor broadcast function.
- *
- * Binds to a tldraw editor and an awareness manager to:
- * 1. Convert screen coordinates to page coordinates
- * 2. Throttle broadcasts at ~15fps
- * 3. Handle pointer leave (clear cursor)
- *
- * Usage:
- * ```ts
- * const broadcast = createCursorBroadcast(editor, awarenessManager);
- * canvas.addEventListener("pointermove", broadcast.onPointerMove);
- * canvas.addEventListener("pointerleave", broadcast.onPointerLeave);
- * // on cleanup:
- * broadcast.dispose();
- * ```
- */
-export function createCursorBroadcast(
-  editor: Editor,
-  awarenessManager: { updateCursor: (x: number, y: number) => void; clearCursor: () => void }
-) {
-  const throttledUpdate = throttle((x: number, y: number) => {
-    const pagePoint = screenToPage(editor, x, y);
-    awarenessManager.updateCursor(pagePoint.x, pagePoint.y);
-  }, COLLABORATION.CURSOR_THROTTLE_MS);
-
-  return {
-    onPointerMove: (e: PointerEvent | { clientX: number; clientY: number }) => {
-      throttledUpdate(e.clientX, e.clientY);
-    },
-
-    onPointerLeave: () => {
-      throttledUpdate.cancel();
-      awarenessManager.clearCursor();
-    },
-
-    dispose: () => {
-      throttledUpdate.cancel();
-    },
-  };
-}

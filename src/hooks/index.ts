@@ -11,7 +11,9 @@
  * - useBoard*:          Board-related hooks (Phase 6+)
  */
 
-export { useYjsSync, type UseYjsSyncOptions, type UseYjsSyncReturn } from "./use-yjs-sync";
+export { useYjsSync, type UseYjsSyncOptions, type UseYjsSyncReturn, type WhiteboardMode } from "./use-yjs-sync";
 export { useRemoteCursors } from "./use-remote-cursors";
 export { useActiveUsers, type UseActiveUsersReturn } from "./use-active-users";
 export { useCursorBroadcast, type UseCursorBroadcastOptions } from "./use-cursor-broadcast";
+export { useUndoRedo } from "./use-undo-redo";
+

@@ -91,10 +91,24 @@ export const TIERS = {
 export const UPLOAD = {
   /** Max file size per image upload (must match Uploadthing router maxFileSize) */
   MAX_FILE_SIZE_MB: 8,
-  ACCEPTED_IMAGE_TYPES: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
+  ACCEPTED_IMAGE_TYPES: [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/svg+xml",
+    "video/mp4",
+    "video/webm",
+    "video/ogg"
+  ],
   /** Max storage space in bytes/MB for local browser fallback */
   MAX_LOCAL_STORAGE_MB: 5,
 } as const;
+
+export const UPLOAD_LIMITS = {
+  GUEST: 5 * 1024 * 1024, // 5MB limit for guest users
+  AUTH: 20 * 1024 * 1024, // 20MB cloud limit for auth users
+} as const;
+
 
 // ─── UI ──────────────────────────────────────────────────────────────────────
 
@@ -108,3 +122,43 @@ export const CURSOR_COLORS = [
   "#6b8f71", // moss
   "#8a6b7e", // mauve
 ] as const;
+
+// ─── Shape Defaults ──────────────────────────────────────────────────────────
+
+export const SHAPE_DEFAULTS = {
+  STROKE: "#78716c", // default warm stone color
+  STICKY_FILL: "#fef9c3", // default yellow sticky note
+  STICKY_STROKE: "#1e293b",
+  GRID_SIZE: 10,
+  DEFAULT_TEXT_WIDTH: 160,
+  DEFAULT_TEXT_HEIGHT: 40,
+  DEFAULT_STICKY_HEIGHT: 120,
+  DEFAULT_IMAGE_SIZE: 200,
+  FONT_SIZE: 20,
+  FONT_FAMILY: '"Shantell Sans", cursive',
+  BORDER_RADIUS: 4,
+  SHADOW_BLUR: 8,
+  SHADOW_SPREAD: 4,
+} as const;
+
+export const PRESET_COLORS = [
+  // Row 1: Blacks/Whites
+  "#ffffff", "#e7e5e4", "#78716c", "#1c1917",
+  // Row 2: Reds/Pinks
+  "#fca5a5", "#ef4444", "#b91c1c", "#ec4899",
+  // Row 3: Oranges/Yellows
+  "#fed7aa", "#f97316", "#f59e0b", "#eab308",
+  // Row 4: Greens
+  "#84cc16", "#829c87", "#15803d", "#0d9488",
+  // Row 5: Blues/Purples
+  "#38bdf8", "#2563eb", "#4f46e5", "#7c3aed",
+] as const;
+
+export const FONT_FAMILIES = [
+  { name: "Handwriting", value: '"Shantell Sans", cursive' },
+  { name: "Sans Serif", value: '"Inter", sans-serif' },
+  { name: "Serif", value: 'Georgia, serif' },
+  { name: "Monospace", value: '"JetBrains Mono", monospace' },
+] as const;
+
+

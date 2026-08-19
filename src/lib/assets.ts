@@ -1,38 +1,12 @@
 "use client";
 
-/**
- * useAssetStore — returns a TLAssetStore for the tldraw canvas.
- *
- * tldraw's TLAssetStore interface has three methods:
- *   - upload(asset, file)  → store the file, return a URL
- *   - resolve(asset, ctx)  → return the URL to display the asset
- *   - remove(assetIds)     → clean up when user deletes an image
- *
- * This hook adapts those calls to our two storage backends:
- *
- * GUEST MODE:
- *   - upload()  → convert File to base64 data URL (stays in memory / localStorage)
- *   - resolve() → return asset.props.src as-is (already a data URL)
- *   - remove()  → no-op (in-memory, nothing to clean up)
- *
- * AUTH MODE:
- *   - upload()  → check quota → upload to Uploadthing CDN → record in DB
- *   - resolve() → return CDN URL (already in asset.props.src)
- *   - remove()  → remove asset record from DB
- *
- * Usage:
- * ```tsx
- * const assetStore = useAssetStore({ mode, boardId, onUploadStart, onUploadComplete, onUploadError });
- * <Tldraw assets={assetStore} ... />
- * ```
- */
-
 import { useCallback, useRef, useMemo } from "react";
-import type { TLAsset, TLAssetStore, Editor } from "tldraw";
 import type { WhiteboardMode } from "@/hooks/use-yjs-sync";
 import { uploadFiles } from "@/lib/uploadthing";
 import { checkUploadCapacity, recordAsset, deleteAssets } from "@/actions/assets";
 import { UPLOAD } from "@/lib/constants";
+import { nanoid } from "nanoid";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -50,14 +24,17 @@ export interface UploadCallbacks {
 interface UseAssetStoreOptions extends UploadCallbacks {
   mode: WhiteboardMode;
   boardId: string;
-  editor?: Editor | null;
+}
+
+export interface AssetStore {
+  uploadMedia: (file: File, id?: string) => Promise<string>;
+  deleteMedia: (urls: string[]) => Promise<void>;
 }
 
 // ─── Guest: base64 conversion ────────────────────────────────────────────────
 
 /**
  * Convert a File to a base64 data URL.
- * Used in guest mode so images are self-contained in the tldraw store.
  */
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -71,8 +48,8 @@ function fileToDataUrl(file: File): Promise<string> {
 // ─── Validate file ───────────────────────────────────────────────────────────
 
 function validateImageFile(file: File): string | null {
-  if (!UPLOAD.ACCEPTED_IMAGE_TYPES.includes(file.type as typeof UPLOAD.ACCEPTED_IMAGE_TYPES[number])) {
-    return `Unsupported file type: ${file.type}. Accepted: PNG, JPEG, WebP, SVG.`;
+  if (!UPLOAD.ACCEPTED_IMAGE_TYPES.includes(file.type as any)) {
+    return `Unsupported file type: ${file.type}. Accepted: PNG, JPEG, WebP, SVG, MP4, WebM, OGG.`;
   }
   if (file.size > UPLOAD.MAX_FILE_SIZE_MB * 1024 * 1024) {
     return `File too large: ${(file.size / (1024 * 1024)).toFixed(1)}MB. Max: ${UPLOAD.MAX_FILE_SIZE_MB}MB.`;
@@ -89,10 +66,7 @@ export function useAssetStore({
   onUploadProgress,
   onUploadComplete,
   onUploadError,
-  editor,
-}: UseAssetStoreOptions): TLAssetStore {
-  // Use a stable ref for the callbacks to avoid recreating the store object
-  // every time the parent re-renders with new callback references
+}: UseAssetStoreOptions): AssetStore {
   const callbacksRef = useRef<UploadCallbacks>({
     onUploadStart,
     onUploadProgress,
@@ -107,19 +81,12 @@ export function useAssetStore({
   const boardIdRef = useRef(boardId);
   boardIdRef.current = boardId;
 
-  const editorRef = useRef<Editor | null>(null);
-  editorRef.current = editor ?? null;
-
   /**
-   * upload() — called by tldraw when the user drops/pastes an image.
-   *
-   * Returns { src: string } where src is either:
-   * - A base64 data URL (guest mode)
-   * - A Uploadthing CDN URL (auth mode)
+   * uploadMedia() — upload a media file, returns the image URL.
    */
-  const upload = useCallback(
-    async (asset: TLAsset, file: File): Promise<{ src: string }> => {
-      const uploadId = asset.id;
+  const uploadMedia = useCallback(
+    async (file: File, customId?: string): Promise<string> => {
+      const uploadId = customId || nanoid();
       const { onUploadStart: start, onUploadProgress: progress, onUploadComplete: complete, onUploadError: error } = callbacksRef.current;
 
       // ── Validate ──────────────────────────────────────────────────────
@@ -131,13 +98,45 @@ export function useAssetStore({
 
       // ── Guest mode: base64 inline ──────────────────────────────────────
       if (modeRef.current === "guest") {
+        const limitBytes = 5 * 1024 * 1024; // 5MB limit for guest users
+        const shapes = useWhiteboardStore.getState().shapes;
+        const currentMediaSize = Object.values(shapes)
+          .filter((s) => s.type === "image")
+          .reduce((acc, s) => acc + ((s as any).fileSize || 0), 0);
+
+        if (currentMediaSize + file.size > limitBytes) {
+          const msg = `Upload limit exceeded: 5MB maximum limit for guest users. Please delete some existing media to free up space.`;
+          error?.(uploadId, msg);
+          throw new Error(msg);
+        }
+
         start?.(uploadId, file.name);
-        progress?.(uploadId, 50);
+        progress?.(uploadId, 30);
         try {
           const dataUrl = await fileToDataUrl(file);
+          progress?.(uploadId, 70);
+
+          const localListStr = localStorage.getItem("sketchboard-local-media-list");
+          const localList = localListStr ? JSON.parse(localListStr) : [];
+
+          const metadata = {
+            id: uploadId,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            createdAt: new Date().toISOString(),
+            boardId: boardIdRef.current,
+          };
+
+          localList.push(metadata);
+          localStorage.setItem("sketchboard-local-media-list", JSON.stringify(localList));
+          localStorage.setItem(`sketchboard-local-media-data-${uploadId}`, dataUrl);
+
           progress?.(uploadId, 100);
-          complete?.(uploadId, dataUrl);
-          return { src: dataUrl };
+          
+          const localRefUrl = `local://${uploadId}`;
+          complete?.(uploadId, localRefUrl);
+          return localRefUrl;
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Failed to process image";
           error?.(uploadId, msg);
@@ -184,7 +183,7 @@ export function useAssetStore({
 
           progress?.(uploadId, 100);
           complete?.(uploadId, dataUrl);
-          return { src: dataUrl };
+          return dataUrl;
         } catch (localErr) {
           const msg = localErr instanceof Error ? localErr.message : "Failed to store image locally";
           error?.(uploadId, msg);
@@ -201,8 +200,6 @@ export function useAssetStore({
         const uploaded = await uploadFiles("boardImage", {
           files: [file],
           onUploadProgress: ({ progress: pct }) => {
-            // Uploadthing progress is 0-100 for the whole batch;
-            // map it to 10-90% range to leave room for DB write
             progress?.(uploadId, Math.round(10 + (pct * 0.8)));
           },
         });
@@ -215,7 +212,7 @@ export function useAssetStore({
         const cdnUrl = uploadedFile.ufsUrl;
         progress?.(uploadId, 95);
 
-        // 4. Record asset in DB (fire-and-forget, don't block tldraw)
+        // 4. Record asset in DB
         recordAsset({
           boardId: boardIdRef.current,
           url: cdnUrl,
@@ -229,48 +226,35 @@ export function useAssetStore({
         progress?.(uploadId, 100);
         complete?.(uploadId, cdnUrl);
 
-        return { src: cdnUrl };
+        return cdnUrl;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Upload failed";
         error?.(uploadId, msg);
         throw err;
       }
     },
-    [] // no deps — everything accessed via refs
+    []
   );
 
   /**
-   * resolve() — called by tldraw when rendering an image on the canvas.
-   *
-   * For both modes, the src is already correct (data URL or CDN URL).
-   * We return it as-is; tldraw will use it as the <img> src.
+   * deleteMedia() — remove media files from DB and/or local storage.
    */
-  const resolve = useCallback((asset: TLAsset): string | null => {
-    if (!asset.props || !("src" in asset.props)) return null;
-    return (asset.props.src as string) ?? null;
-  }, []);
-
-  /**
-   * remove() — called by tldraw when the user deletes an image from the canvas.
-   *
-   * Guest mode: no-op (in-memory data URL, GC handles it)
-   * Auth mode: remove the DB record (CDN file has its own TTL)
-   */
-  const remove = useCallback(async (assetIds: readonly string[]): Promise<void> => {
-    if (assetIds.length === 0) return;
+  const deleteMedia = useCallback(async (urls: string[]): Promise<void> => {
+    if (urls.length === 0) return;
 
     // Clean up local storage assets if present
     try {
       const localListStr = localStorage.getItem("sketchboard-local-media-list");
       if (localListStr) {
-        let localList = JSON.parse(localListStr) as Array<{ id: string }>;
+        let localList = JSON.parse(localListStr) as Array<{ id: string; url?: string }>;
         const initialLen = localList.length;
         localList = localList.filter((item) => {
-          const match = assetIds.includes(item.id);
-          if (match) {
+          // Check if data key or item id matches deleted elements
+          const isMatch = urls.includes(item.id) || (item.url && urls.includes(item.url));
+          if (isMatch) {
             localStorage.removeItem(`sketchboard-local-media-data-${item.id}`);
           }
-          return !match;
+          return !isMatch;
         });
         if (localList.length !== initialLen) {
           localStorage.setItem("sketchboard-local-media-list", JSON.stringify(localList));
@@ -282,23 +266,12 @@ export function useAssetStore({
 
     if (modeRef.current !== "auth") return;
 
-    const urls: string[] = [];
-    if (editorRef.current) {
-      for (const id of assetIds) {
-        const asset = editorRef.current.getAsset(id as any);
-        if (asset && asset.props && "src" in asset.props && typeof asset.props.src === "string") {
-          if (!asset.props.src.startsWith("data:")) {
-            urls.push(asset.props.src);
-          }
-        }
-      }
-    }
-
-    if (urls.length > 0) {
-      console.log("[useAssetStore] Assets removed from canvas, deleting from cloud:", urls);
-      await deleteAssets(urls);
+    const nonDataUrls = urls.filter((url) => !url.startsWith("data:"));
+    if (nonDataUrls.length > 0) {
+      console.log("[useAssetStore] Deleting assets from cloud:", nonDataUrls);
+      await deleteAssets(nonDataUrls);
     }
   }, []);
 
-  return useMemo(() => ({ upload, resolve, remove }), [upload, resolve, remove]);
+  return useMemo(() => ({ uploadMedia, deleteMedia }), [uploadMedia, deleteMedia]);
 }

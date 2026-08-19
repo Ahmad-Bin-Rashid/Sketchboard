@@ -10,7 +10,6 @@
  * - cursor-manager:  Coordinate transforms, throttling, smooth interpolation
  */
 
-export { TldrawYjsSync, type TldrawYjsSyncOptions } from "./tldraw-yjs-sync";
 
 export {
   useConnectionStore,
@@ -30,10 +29,7 @@ export {
 
 export {
   throttle,
-  screenToPage,
-  pageToScreen,
   lerp,
   updateSmoothedCursor,
-  createCursorBroadcast,
   type SmoothedCursor,
 } from "./cursor-manager";
