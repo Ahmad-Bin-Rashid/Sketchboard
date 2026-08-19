@@ -32,7 +32,11 @@ export const ourFileRouter = {
    */
   boardImage: f({
     image: {
-      maxFileSize: "8MB",
+      maxFileSize: "4MB",
+      maxFileCount: 1,
+    },
+    video: {
+      maxFileSize: "4MB",
       maxFileCount: 1,
     },
   })

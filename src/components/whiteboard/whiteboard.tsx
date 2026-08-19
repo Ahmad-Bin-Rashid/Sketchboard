@@ -14,7 +14,7 @@
  *
  * Auth mode ("auth"):
  * - Real userId/userName/avatarUrl from Clerk session (passed via props)
- * - Board state persisted to DB via PartyKit (Phase 8)
+ * - Board state persisted to DB
  * - Full dashboard access
  * - Images: uploaded to Uploadthing CDN, recorded in DB
  */
@@ -136,7 +136,7 @@ export function Whiteboard({
 
   // ─── Asset store — image upload backend ────────────────────────
 
-  const { uploadMedia } = useAssetStore({
+  const { uploadMedia, deleteMedia } = useAssetStore({
     mode,
     boardId,
     onUploadStart: (id, fileName) => {
@@ -236,7 +236,7 @@ export function Whiteboard({
   }, [resolvedTheme, shapesMap]);
 
   // Keyboard Shortcuts Hook
-  useWhiteboardKeyboard(shapesMap);
+  useWhiteboardKeyboard(shapesMap, uploadMedia, deleteMedia, viewportRef, mode, boardId);
   const undoRedoState = useUndoRedo(undoManager);
 
   const focusMode = useWhiteboardStore((s) => s.focusMode);
@@ -276,6 +276,29 @@ export function Whiteboard({
 
   return (
     <div className="relative h-screen w-screen">
+      {/* Room Full Overlay */}
+      {connectionStatus === "full" && (
+        <div className="absolute inset-0 z-500 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
+          <div className="max-w-md rounded-2xl border bg-card p-6 shadow-xl text-center flex flex-col items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center animate-bounce">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-foreground">Room is Full</h2>
+            <p className="text-sm text-muted-foreground">
+              This whiteboard has reached its peak connection limit of 10 users. Please wait for someone to leave before joining.
+            </p>
+            <button
+              onClick={() => window.location.href = "/"}
+              className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Screen rotation prompt overlay for mobile portrait */}
       <div className="portrait-rotate-overlay select-none flex-col gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-light text-primary animate-bounce">
@@ -302,6 +325,8 @@ export function Whiteboard({
           undoManager={undoManager}
           viewportRef={viewportRef}
           uploadMedia={uploadMedia}
+          deleteMedia={deleteMedia}
+          boardId={boardId}
         />
       </div>
 
@@ -338,13 +363,22 @@ export function Whiteboard({
         boardId={boardId}
         boardName={boardName}
         onRename={handleBoardRename}
+        deleteMedia={deleteMedia}
       />
 
       {/* Main floating pill toolbar */}
-      {!focusMode && <Toolbar shapesMap={shapesMap} />}
+      {!focusMode && (
+        <Toolbar
+          shapesMap={shapesMap}
+          viewportRef={viewportRef}
+          uploadMedia={uploadMedia}
+          mode={mode}
+          boardId={boardId}
+        />
+      )}
 
       {/* Right-side style panel */}
-      {!focusMode && <StylePanel shapesMap={shapesMap} />}
+      {!focusMode && <StylePanel shapesMap={shapesMap} boardId={boardId} />}
 
       {/* Upload progress toasts — bottom-right, above toolbar */}
       <UploadToastManager toasts={uploadToasts} onDismiss={dismissToast} />

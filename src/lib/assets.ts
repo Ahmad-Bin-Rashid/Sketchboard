@@ -6,6 +6,7 @@ import { uploadFiles } from "@/lib/uploadthing";
 import { checkUploadCapacity, recordAsset, deleteAssets } from "@/actions/assets";
 import { UPLOAD } from "@/lib/constants";
 import { nanoid } from "nanoid";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,8 +48,8 @@ function fileToDataUrl(file: File): Promise<string> {
 // ─── Validate file ───────────────────────────────────────────────────────────
 
 function validateImageFile(file: File): string | null {
-  if (!UPLOAD.ACCEPTED_IMAGE_TYPES.includes(file.type as typeof UPLOAD.ACCEPTED_IMAGE_TYPES[number])) {
-    return `Unsupported file type: ${file.type}. Accepted: PNG, JPEG, WebP, SVG.`;
+  if (!UPLOAD.ACCEPTED_IMAGE_TYPES.includes(file.type as any)) {
+    return `Unsupported file type: ${file.type}. Accepted: PNG, JPEG, WebP, SVG, MP4, WebM, OGG.`;
   }
   if (file.size > UPLOAD.MAX_FILE_SIZE_MB * 1024 * 1024) {
     return `File too large: ${(file.size / (1024 * 1024)).toFixed(1)}MB. Max: ${UPLOAD.MAX_FILE_SIZE_MB}MB.`;
@@ -97,13 +98,45 @@ export function useAssetStore({
 
       // ── Guest mode: base64 inline ──────────────────────────────────────
       if (modeRef.current === "guest") {
+        const limitBytes = 5 * 1024 * 1024; // 5MB limit for guest users
+        const shapes = useWhiteboardStore.getState().shapes;
+        const currentMediaSize = Object.values(shapes)
+          .filter((s) => s.type === "image")
+          .reduce((acc, s) => acc + ((s as any).fileSize || 0), 0);
+
+        if (currentMediaSize + file.size > limitBytes) {
+          const msg = `Upload limit exceeded: 5MB maximum limit for guest users. Please delete some existing media to free up space.`;
+          error?.(uploadId, msg);
+          throw new Error(msg);
+        }
+
         start?.(uploadId, file.name);
-        progress?.(uploadId, 50);
+        progress?.(uploadId, 30);
         try {
           const dataUrl = await fileToDataUrl(file);
+          progress?.(uploadId, 70);
+
+          const localListStr = localStorage.getItem("sketchboard-local-media-list");
+          const localList = localListStr ? JSON.parse(localListStr) : [];
+
+          const metadata = {
+            id: uploadId,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            createdAt: new Date().toISOString(),
+            boardId: boardIdRef.current,
+          };
+
+          localList.push(metadata);
+          localStorage.setItem("sketchboard-local-media-list", JSON.stringify(localList));
+          localStorage.setItem(`sketchboard-local-media-data-${uploadId}`, dataUrl);
+
           progress?.(uploadId, 100);
-          complete?.(uploadId, dataUrl);
-          return dataUrl;
+          
+          const localRefUrl = `local://${uploadId}`;
+          complete?.(uploadId, localRefUrl);
+          return localRefUrl;
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Failed to process image";
           error?.(uploadId, msg);

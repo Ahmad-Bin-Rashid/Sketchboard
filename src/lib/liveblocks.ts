@@ -16,30 +16,47 @@
  */
 
 import { createClient } from "@liveblocks/client";
+import { useConnectionStore } from "@/lib/sync/connection";
 
 /**
- * Create a Liveblocks client using the public key.
+ * Create a Liveblocks client using backend authentication.
  *
- * No auth endpoint needed — the public key grants access to all rooms
- * without server-side token generation. This eliminates the auth retry loop
- * that occurs when using `prepareSession` (access tokens) with the v3 SDK.
- *
- * Memoize this in the calling hook with useMemo to avoid recreating on every
- * render.
+ * Uses /api/liveblocks-auth to authorize users and guests.
+ * Restricts connection if room is full.
  */
 export function createLiveblocksClient() {
-  const publicApiKey = process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY;
-
-  if (!publicApiKey || publicApiKey.startsWith("pk_dev_placeholder")) {
-    console.warn(
-      "[Liveblocks] NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY is not configured. " +
-        "Real-time collaboration will not work. " +
-        "Get a key from liveblocks.io/dashboard"
-    );
-  }
-
   return createClient({
-    publicApiKey: publicApiKey ?? "pk_dev_placeholder",
+    authEndpoint: async (room) => {
+      let guestId: string | undefined;
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("sketchboard:guest");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            guestId = parsed.guestId;
+          }
+        } catch {}
+      }
+
+      const response = await fetch("/api/liveblocks-auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ room, guestId }),
+      });
+
+      if (response.status === 403) {
+        useConnectionStore.getState().setStatus("full");
+        throw new Error("Room connection limit reached (max 10 users)");
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to authenticate with Liveblocks");
+      }
+
+      return await response.json();
+    },
     throttle: 50,
   });
 }

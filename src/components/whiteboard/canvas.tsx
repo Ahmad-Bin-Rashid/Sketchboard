@@ -10,7 +10,7 @@ import { SelectionBox } from "./selection-box";
 import { nanoid } from "nanoid";
 import { generateNewTopIndex } from "@/lib/fractional-index";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
-import { addImageShapes, deleteShapes } from "@/lib/board-actions";
+import { addImageShapes, removeShapes, saveShape } from "@/lib/board-actions";
 import { useTheme } from "@/components/theme-provider";
 
 
@@ -20,9 +20,11 @@ interface CanvasProps {
   undoManager: Y.UndoManager | null;
   viewportRef: React.RefObject<HTMLDivElement | null>;
   uploadMedia: (file: File) => Promise<string>;
+  deleteMedia?: (urls: string[]) => Promise<void>;
+  boardId: string;
 }
 
-export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: CanvasProps) {
+export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia, deleteMedia, boardId }: CanvasProps) {
   const {
     pan,
     zoom,
@@ -118,8 +120,8 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           canvasPos.y <= shape.y + shape.height
         );
 
-        if (clickedShape && shapesMap) {
-          deleteShapes([clickedShape.id], shapesMap);
+        if (clickedShape) {
+          removeShapes(shapesMap, boardId, [clickedShape.id], deleteMedia);
         }
 
         lastEraserPosRef.current = canvasPos;
@@ -134,7 +136,8 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
         activeTool !== "select" &&
         activeTool !== "hand" &&
         activeTool !== "laser" &&
-        activeTool !== "eraser";
+        activeTool !== "eraser" &&
+        activeTool !== "embed";
 
       if (isShapeTool && e.button === 0 && isCanvasBackground) {
         const rect = viewportRef.current.getBoundingClientRect();
@@ -234,7 +237,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             });
 
             if (idsToDelete.length > 0) {
-              deleteShapes(idsToDelete, shapesMap);
+              removeShapes(shapesMap, boardId, idsToDelete, deleteMedia);
             }
 
             lastEraserPosRef.current = canvasPos;
@@ -426,22 +429,19 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           }
         }
 
-        if (isValid && shapesMap) {
-          const doc = shapesMap.doc;
-          if (doc) {
-            doc.transact(() => {
-              shapesMap.set(finalShape.id, finalShape);
-            });
+        if (isValid) {
+          const success = saveShape(shapesMap, boardId, finalShape);
+          if (success) {
+            // Focus selection on the newly created shape
+            setSelectedShapeIds([finalShape.id]);
           }
-          // Focus selection on the newly created shape
-          setSelectedShapeIds([finalShape.id]);
         }
 
         setDraftShape(null);
         setActiveTool("select");
       }
     },
-    [isPanning, rubberBandRect, shapes, setSelectedShapeIds, setRubberBandRect, draftShape, shapesMap, setDraftShape, setActiveTool, activeTool, isErasing]
+    [isPanning, rubberBandRect, shapes, setSelectedShapeIds, setRubberBandRect, draftShape, shapesMap, setDraftShape, setActiveTool, activeTool, isErasing, boardId]
   );
 
 
@@ -601,18 +601,14 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
           fontFamily: SHAPE_DEFAULTS.FONT_FAMILY,
         };
 
-        const doc = shapesMap.doc;
-        if (doc) {
-          doc.transact(() => {
-            shapesMap.set(id, newShape);
-          });
+        const success = saveShape(shapesMap, boardId, newShape);
+        if (success) {
+          setActiveTool("select");
+          setSelectedShapeIds([id]);
         }
-        
-        setActiveTool("select");
-        setSelectedShapeIds([id]);
       }
     },
-    [shapesMap, pan, zoom, shapes, activeTool, setActiveTool, setSelectedShapeIds, viewportRef]
+    [shapesMap, pan, zoom, shapes, activeTool, setActiveTool, setSelectedShapeIds, viewportRef, boardId]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -631,9 +627,9 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       const rect = viewportRef.current.getBoundingClientRect();
       const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
 
-      await addImageShapes(imageFiles, canvasPos, Object.values(shapes), shapesMap, uploadMedia, setSelectedShapeIds);
+      await addImageShapes(imageFiles, canvasPos, Object.values(shapes), shapesMap, boardId, uploadMedia, setSelectedShapeIds);
     },
-    [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef]
+    [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef, boardId]
   );
 
   const handlePaste = useCallback(
@@ -651,9 +647,9 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
       const clientY = rect.top + rect.height / 2;
       const canvasPos = screenToCanvas(clientX, clientY, pan, zoom, rect);
 
-      await addImageShapes(imageFiles, canvasPos, Object.values(shapes), shapesMap, uploadMedia, setSelectedShapeIds);
+      await addImageShapes(imageFiles, canvasPos, Object.values(shapes), shapesMap, boardId, uploadMedia, setSelectedShapeIds);
     },
-    [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef]
+    [shapesMap, pan, zoom, shapes, uploadMedia, setSelectedShapeIds, viewportRef, boardId]
   );
 
   return (
@@ -712,12 +708,14 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
               key={shape.id}
               shape={shape}
               shapesMap={shapesMap}
+              boardId={boardId}
             />
           ))}
         {draftShape && (
           <ShapeRenderer
             shape={draftShape}
             shapesMap={shapesMap}
+            boardId={boardId}
             isDraft
           />
         )}
@@ -733,7 +731,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia }: Can
             }}
           />
         )}
-        <SelectionBox shapesMap={shapesMap} />
+        <SelectionBox shapesMap={shapesMap} boardId={boardId} />
       </div>
 
       {activeTool === "eraser" && pointerPos && (

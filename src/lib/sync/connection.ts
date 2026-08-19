@@ -14,7 +14,7 @@ import { create } from "zustand";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ConnectionStatus = "disconnected" | "connecting" | "connected";
+export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "full";
 
 export interface ConnectionState {
   /** Current WebSocket connection status */
@@ -91,6 +91,8 @@ export function getConnectionLabel(status: ConnectionStatus): string {
       return "Connecting…";
     case "disconnected":
       return "Offline";
+    case "full":
+      return "Room Full (Max 10)";
   }
 }
 
@@ -106,6 +108,8 @@ export function getConnectionColor(status: ConnectionStatus): string {
       return "text-amber-500";
     case "disconnected":
       return "text-red-400";
+    case "full":
+      return "text-rose-500";
   }
 }
 
@@ -120,5 +124,7 @@ export function getConnectionDotColor(status: ConnectionStatus): string {
       return "bg-amber-400";
     case "disconnected":
       return "bg-red-400";
+    case "full":
+      return "bg-rose-500";
   }
 }

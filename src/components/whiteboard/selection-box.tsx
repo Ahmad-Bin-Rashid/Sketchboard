@@ -5,14 +5,16 @@ import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
 import { throttle } from "@/lib/sync/cursor-manager";
+import { saveShape } from "@/lib/board-actions";
 
 interface SelectionBoxProps {
   shapesMap: Y.Map<CustomShape> | null;
+  boardId: string;
 }
 
 type HandleType = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
-export function SelectionBox({ shapesMap }: SelectionBoxProps) {
+export function SelectionBox({ shapesMap, boardId }: SelectionBoxProps) {
   const { selectedShapeIds, shapes, pan, zoom } = useWhiteboardStore();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -56,15 +58,9 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
   // Throttled Yjs writer
   const throttledYjsWrite = useMemo(() => {
     return throttle((updated: CustomShape[]) => {
-      if (!shapesMap) return;
-      const doc = shapesMap.doc;
-      if (doc) {
-        doc.transact(() => {
-          updated.forEach((s) => shapesMap.set(s.id, s));
-        });
-      }
+      updated.forEach((s) => saveShape(shapesMap, boardId, s));
     }, 50);
-  }, [shapesMap]);
+  }, [shapesMap, boardId]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, handle: HandleType | null) => {
@@ -177,21 +173,65 @@ export function SelectionBox({ shapesMap }: SelectionBoxProps) {
         let newWidth = bounds.width;
         let newHeight = bounds.height;
 
-        if (activeHandle.includes("e")) newWidth = Math.max(10, bounds.width + deltaX);
-        if (activeHandle.includes("s")) newHeight = Math.max(10, bounds.height + deltaY);
-        
-        if (activeHandle.includes("w")) {
-          const possibleWidth = bounds.width - deltaX;
-          if (possibleWidth > 10) {
-            newWidth = possibleWidth;
-            newX = bounds.x + deltaX;
+        const isSingleImageWithRatio =
+          selectedShapes.length === 1 &&
+          selectedShapes[0].type === "image" &&
+          (selectedShapes[0] as any).keepRatio;
+
+        if (isSingleImageWithRatio) {
+          const originalRatio = bounds.width / bounds.height || 1;
+          if (activeHandle === "se") {
+            newWidth = Math.max(10, bounds.width + deltaX);
+            newHeight = newWidth / originalRatio;
+          } else if (activeHandle === "sw") {
+            newWidth = Math.max(10, bounds.width - deltaX);
+            newHeight = newWidth / originalRatio;
+            newX = bounds.x + bounds.width - newWidth;
+          } else if (activeHandle === "ne") {
+            newWidth = Math.max(10, bounds.width + deltaX);
+            newHeight = newWidth / originalRatio;
+            newY = bounds.y + bounds.height - newHeight;
+          } else if (activeHandle === "nw") {
+            newWidth = Math.max(10, bounds.width - deltaX);
+            newHeight = newWidth / originalRatio;
+            newX = bounds.x + bounds.width - newWidth;
+            newY = bounds.y + bounds.height - newHeight;
+          } else if (activeHandle === "e") {
+            newWidth = Math.max(10, bounds.width + deltaX);
+            newHeight = newWidth / originalRatio;
+            newY = bounds.y + (bounds.height - newHeight) / 2;
+          } else if (activeHandle === "w") {
+            newWidth = Math.max(10, bounds.width - deltaX);
+            newHeight = newWidth / originalRatio;
+            newX = bounds.x + bounds.width - newWidth;
+            newY = bounds.y + (bounds.height - newHeight) / 2;
+          } else if (activeHandle === "s") {
+            newHeight = Math.max(10, bounds.height + deltaY);
+            newWidth = newHeight * originalRatio;
+            newX = bounds.x + (bounds.width - newWidth) / 2;
+          } else if (activeHandle === "n") {
+            newHeight = Math.max(10, bounds.height - deltaY);
+            newWidth = newHeight * originalRatio;
+            newY = bounds.y + bounds.height - newHeight;
+            newX = bounds.x + (bounds.width - newWidth) / 2;
           }
-        }
-        if (activeHandle.includes("n")) {
-          const possibleHeight = bounds.height - deltaY;
-          if (possibleHeight > 10) {
-            newHeight = possibleHeight;
-            newY = bounds.y + deltaY;
+        } else {
+          if (activeHandle.includes("e")) newWidth = Math.max(10, bounds.width + deltaX);
+          if (activeHandle.includes("s")) newHeight = Math.max(10, bounds.height + deltaY);
+          
+          if (activeHandle.includes("w")) {
+            const possibleWidth = bounds.width - deltaX;
+            if (possibleWidth > 10) {
+              newWidth = possibleWidth;
+              newX = bounds.x + deltaX;
+            }
+          }
+          if (activeHandle.includes("n")) {
+            const possibleHeight = bounds.height - deltaY;
+            if (possibleHeight > 10) {
+              newHeight = possibleHeight;
+              newY = bounds.y + deltaY;
+            }
           }
         }
 

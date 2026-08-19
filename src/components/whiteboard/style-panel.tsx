@@ -13,15 +13,16 @@ import {
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
 import { cn } from "@/lib/utils";
-import { arrangeShapes } from "@/lib/board-actions";
+import { arrangeShapes, saveShape } from "@/lib/board-actions";
 import { PRESET_COLORS, FONT_FAMILIES, SHAPE_DEFAULTS } from "@/lib/constants";
 
 
 interface StylePanelProps {
   shapesMap: Y.Map<CustomShape> | null;
+  boardId: string;
 }
 
-export function StylePanel({ shapesMap }: StylePanelProps) {
+export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
   const { selectedShapeIds, shapes, setSelectedShapeIds } = useWhiteboardStore();
 
   // Baseline selection
@@ -37,30 +38,26 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
   const baseline = selectedShapes[0];
 
   const updateSelectedShapesStyle = (updates: Partial<CustomShape> | ((shape: CustomShape) => Partial<CustomShape>)) => {
-    if (!shapesMap || selectedShapeIds.length === 0) return;
+    if (selectedShapeIds.length === 0) return;
 
-    const doc = shapesMap.doc;
-    if (doc) {
-      doc.transact(() => {
-        selectedShapeIds.forEach((id) => {
-          const current = shapesMap.get(id);
-          if (current) {
-            const calculatedUpdates = typeof updates === "function" ? updates(current) : updates;
-            const updated = {
-              ...current,
-              ...calculatedUpdates,
-            } as CustomShape;
-            shapesMap.set(id, updated);
-          }
-        });
-      });
-    }
+    selectedShapeIds.forEach((id) => {
+      const current = shapes[id];
+      if (current) {
+        const calculatedUpdates = typeof updates === "function" ? updates(current) : updates;
+        const updated = {
+          ...current,
+          ...calculatedUpdates,
+        } as CustomShape;
+        saveShape(shapesMap, boardId, updated);
+      }
+    });
   };
 
 
   const isTextOrSticky = selectedShapes.some(s => s.type === "text" || s.type === "sticky");
   const isRectOrRoundedRect = selectedShapes.some(s => s.type === "rectangle" || s.type === "rounded-rectangle");
   const isFrame = selectedShapes.some(s => s.type === "frame");
+  const isMedia = selectedShapes.some(s => s.type === "image");
 
   return (
     <div
@@ -69,7 +66,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
     >
         
       {/* ─── SECTION: Color & Fill ─── */}
-      {!isFrame && (
+      {!isFrame && !isMedia && (
       <div className="flex flex-col gap-2">
         <button
           className="flex items-center justify-between w-full text-[11px] text-foreground uppercase py-0.5"
@@ -154,7 +151,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
       )}
 
       {/* ─── SECTION: Line & Stroke style ─── */}
-      {!isTextOrSticky && !isFrame && (
+      {!isTextOrSticky && !isFrame && !isMedia && (
       <div className="flex flex-col gap-2">
         <button
           className="flex items-center justify-between w-full text-[11px] text-foreground uppercase"
@@ -229,7 +226,7 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
       </div>
 
       {/* ─── SECTION: Typography (Text/Sticky only) ─── */}
-      {isTextOrSticky && !isFrame &&(
+      {isTextOrSticky && !isFrame && !isMedia && (
         <div className="flex flex-col gap-2">
           <button
             className="flex items-center justify-between w-full text-[11px] text-foreground uppercase"
@@ -443,6 +440,87 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
           </div>
       </div>
 
+      {/* ─── SECTION: Media Options ─── */}
+      {isMedia && (
+        <div className="flex flex-col gap-3">
+          {/* <div className="text-[11px] text-foreground uppercase border-b border-panel-border pb-1">
+            <span>Media Options</span>
+          </div> */}
+
+          {/* Lock Aspect Ratio */}
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-foreground uppercase">Lock Aspect Ratio</span>
+            <button
+              onClick={() =>
+                updateSelectedShapesStyle({
+                  keepRatio: !(baseline as any).keepRatio,
+                })
+              }
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                (baseline as any).keepRatio ? "bg-primary" : "bg-panel-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                  (baseline as any).keepRatio ? "translate-x-4" : "translate-x-0"
+                )}
+              />
+            </button>
+          </div>
+
+          {/* Crop Control */}
+          <div className="flex flex-col gap-3 pt-1">
+            <div className="flex items-center justify-between text-[11px] text-foreground uppercase">
+              <span>Crop Media</span>
+              <button
+                onClick={() =>
+                  updateSelectedShapesStyle({
+                    crop: { top: 0, right: 0, bottom: 0, left: 0 },
+                  })
+                }
+                className="text-[9px] font-bold text-primary hover:underline uppercase cursor-pointer"
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Crop Sliders */}
+            {(["top", "bottom", "left", "right"] as const).map((dir) => {
+              const currentCrop = (baseline as any).crop?.[dir] ?? 0;
+              return (
+                <div key={dir} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[9px] font-bold text-muted-foreground uppercase">
+                    <span>{dir}</span>
+                    <span>{currentCrop}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="80"
+                    value={currentCrop}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      updateSelectedShapesStyle((s: any) => ({
+                        crop: {
+                          top: s.crop?.top ?? 0,
+                          right: s.crop?.right ?? 0,
+                          bottom: s.crop?.bottom ?? 0,
+                          left: s.crop?.left ?? 0,
+                          [dir]: val,
+                        },
+                      }));
+                    }}
+                    className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ─── SECTION: Layering & Arrange ─── */}
       <div className="flex flex-col gap-2">
         <button
@@ -454,25 +532,25 @@ export function StylePanel({ shapesMap }: StylePanelProps) {
         
           <div className="grid grid-cols-2 gap-1.5">
             <button
-              onClick={() => arrangeShapes(selectedShapeIds, "forward", shapesMap)}
+              onClick={() => arrangeShapes(selectedShapeIds, "forward", shapesMap, boardId)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
               Forward
             </button>
             <button
-              onClick={() => arrangeShapes(selectedShapeIds, "backward", shapesMap)}
+              onClick={() => arrangeShapes(selectedShapeIds, "backward", shapesMap, boardId)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
               Backward
             </button>
             <button
-              onClick={() => arrangeShapes(selectedShapeIds, "front", shapesMap)}
+              onClick={() => arrangeShapes(selectedShapeIds, "front", shapesMap, boardId)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
               Front
             </button>
             <button
-              onClick={() => arrangeShapes(selectedShapeIds, "back", shapesMap)}
+              onClick={() => arrangeShapes(selectedShapeIds, "back", shapesMap, boardId)}
               className="py-1 px-2.5 rounded-md text-[10px] font-bold border border-panel-border bg-background hover:bg-surface-hover transition text-foreground flex items-center justify-center gap-1.5"
             >
               Back

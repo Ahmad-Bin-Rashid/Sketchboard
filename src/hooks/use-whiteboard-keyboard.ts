@@ -2,9 +2,16 @@ import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
-import { deleteShapes } from "@/lib/board-actions";
+import { removeShapes, saveShape, triggerMediaUpload } from "@/lib/board-actions";
 
-export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
+export function useWhiteboardKeyboard(
+  shapesMap: Y.Map<CustomShape> | null,
+  uploadMedia: (file: File) => Promise<string>,
+  deleteMedia: (urls: string[]) => Promise<void>,
+  viewportRef: React.RefObject<HTMLDivElement | null>,
+  mode: "guest" | "auth",
+  boardId: string
+) {
   const shapesMapRef = useRef<Y.Map<CustomShape> | null>(shapesMap);
 
   useEffect(() => {
@@ -41,7 +48,7 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedShapeIds.length > 0 && shapesMapRef.current) {
           e.preventDefault();
-          deleteShapes(selectedShapeIds, shapesMapRef.current);
+          removeShapes(shapesMapRef.current, boardId, selectedShapeIds, deleteMedia);
           setSelectedShapeIds([]);
         }
       }
@@ -57,6 +64,22 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
       if (isCmdOrCtrl && e.key.toLowerCase() === "a") {
         e.preventDefault();
         setSelectedShapeIds(Object.keys(shapes));
+      }
+
+      // Ctrl/Cmd + U (Upload Media)
+      if (isCmdOrCtrl && e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        if (viewportRef) {
+          triggerMediaUpload({
+            shapesMap: shapesMapRef.current,
+            shapes,
+            boardId,
+            uploadMedia,
+            viewportRef,
+            setSelectedShapeIds,
+            mode: mode || "guest",
+          });
+        }
       }
 
       // 5. Tool Selection Shortcuts (S, R, O, D, T, N, L, A, H)
@@ -115,31 +138,27 @@ export function useWhiteboardKeyboard(shapesMap: Y.Map<CustomShape> | null) {
         if (e.key === "ArrowDown") dy = nudgeAmount;
 
         const currentMap = shapesMapRef.current;
-        const doc = currentMap.doc;
-        if (doc) {
-          doc.transact(() => {
-            selectedShapeIds.forEach((id) => {
-              const current = currentMap.get(id);
-              if (current) {
-                const updated = {
-                  ...current,
-                  x: current.x + dx,
-                  y: current.y + dy,
-                } as CustomShape;
+        const storeShapes = useWhiteboardStore.getState().shapes;
+        selectedShapeIds.forEach((id) => {
+          const current = storeShapes[id];
+          if (current) {
+            const updated = {
+              ...current,
+              x: current.x + dx,
+              y: current.y + dy,
+            } as CustomShape;
 
-                if (updated.type === "draw" && current.type === "draw") {
-                  updated.points = current.points.map(([px, py, pr]) => [
-                    px + dx,
-                    py + dy,
-                    pr,
-                  ]);
-                }
+            if (updated.type === "draw" && current.type === "draw") {
+              updated.points = current.points.map(([px, py, pr]) => [
+                px + dx,
+                py + dy,
+                pr,
+              ]);
+            }
 
-                currentMap.set(id, updated);
-              }
-            });
-          });
-        }
+            saveShape(currentMap, boardId, updated);
+          }
+        });
       }
     };
 

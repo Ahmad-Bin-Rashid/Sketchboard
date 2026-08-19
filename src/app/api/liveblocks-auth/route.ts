@@ -65,6 +65,32 @@ export async function POST(req: NextRequest) {
     userName = "Guest";
   }
 
+  // ── Check peak connections (limit to 10) ─────────────────────────────────
+  try {
+    const activeUsersRes = await fetch(
+      `https://api.liveblocks.io/v2/rooms/${room}/active_users`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.LIVEBLOCKS_SECRET_KEY!}`,
+        },
+      }
+    );
+    if (activeUsersRes.ok) {
+      const activeUsersData = await activeUsersRes.json();
+      const activeConnections = activeUsersData.data ?? [];
+      
+      const isAlreadyConnected = activeConnections.some((c: any) => c.id === userId);
+      if (activeConnections.length >= 10 && !isAlreadyConnected) {
+        return NextResponse.json(
+          { error: "Peak connections limit reached (max 10 users per room)" },
+          { status: 403 }
+        );
+      }
+    }
+  } catch (err) {
+    console.error("[liveblocks-auth] Failed to fetch active users count:", err);
+  }
+
   // ── Issue a Liveblocks session token ─────────────────────────────────────
 
   const session = liveblocks.prepareSession(userId, {

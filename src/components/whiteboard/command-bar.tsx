@@ -32,13 +32,13 @@ import {
   arrangeShapes,
   alignShapes,
   fitToContent,
-  deleteShapes,
+  removeShapes,
+  saveShape,
 } from "@/lib/board-actions";
 import { exportBoardAsFile, exportBoardAsSVG, exportBoardAsPNG, openImportFilePicker, type ImportResult } from "@/lib/board-export";
 import { generateNewTopIndex } from "@/lib/fractional-index";
 import { nanoid } from "nanoid";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
-import { EmbedDialog } from "./embed-dialog";
 import { useTheme } from "@/components/theme-provider";
 
 interface CommandBarProps {
@@ -51,6 +51,7 @@ interface CommandBarProps {
   boardId: string;
   boardName: string;
   onRename?: (newName: string) => void;
+  deleteMedia?: (urls: string[]) => Promise<void>;
 }
 
 export function CommandBar({
@@ -63,6 +64,7 @@ export function CommandBar({
   boardId,
   boardName,
   onRename,
+  deleteMedia,
 }: CommandBarProps) {
   const {
     selectedShapeIds,
@@ -77,7 +79,6 @@ export function CommandBar({
   } = useWhiteboardStore();
 
   const [activeDropdown, setActiveDropdown] = useState<"export" | "board" | "arrange" | "align" | null>(null);
-  const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
@@ -99,81 +100,48 @@ export function CommandBar({
   };
 
   const handleDuplicate = () => {
-    duplicateShapes(selectedShapeIds, shapesMap, (newIds) => {
+    duplicateShapes(selectedShapeIds, shapesMap, boardId, (newIds) => {
       setSelectedShapeIds(newIds);
     });
     setActiveDropdown(null);
   };
 
   const handleDelete = () => {
-    deleteShapes(selectedShapeIds, shapesMap);
+    removeShapes(shapesMap, boardId, selectedShapeIds, deleteMedia);
     setSelectedShapeIds([]);
     setActiveDropdown(null);
   };
 
   const handleArrange = (action: "front" | "back" | "forward" | "backward") => {
-    arrangeShapes(selectedShapeIds, action, shapesMap);
+    arrangeShapes(selectedShapeIds, action, shapesMap, boardId);
     setActiveDropdown(null);
   };
 
   const handleAlign = (axis: "left" | "center" | "right" | "top" | "middle" | "bottom") => {
-    alignShapes(selectedShapeIds, axis, shapesMap);
+    alignShapes(selectedShapeIds, axis, shapesMap, boardId);
     setActiveDropdown(null);
   };
 
-  const handleInsertEmbed = (url: string, category: string) => {
-    if (!shapesMap) return;
-
-    const doc = shapesMap.doc;
-    if (doc) {
-      doc.transact(() => {
-        const id = nanoid();
-        const index = generateNewTopIndex(Object.values(shapes));
-        
-        // Place in center of viewport
-        let cx = 100;
-        let cy = 100;
-        if (viewportRef.current) {
-          const rect = viewportRef.current.getBoundingClientRect();
-          const store = useWhiteboardStore.getState();
-          cx = (rect.width / 2 - store.pan.x) / store.zoom - 200;
-          cy = (rect.height / 2 - store.pan.y) / store.zoom - 150;
-        }
-
-        const newShape: CustomShape = {
-          id,
-          type: "embed",
-          x: cx,
-          y: cy,
-          width: 400,
-          height: 300,
-          fill: "transparent",
-          stroke: SHAPE_DEFAULTS.STROKE,
-          strokeWidth: 2,
-          opacity: 1.0,
-          index,
-          src: url,
-        };
-
-        shapesMap.set(id, newShape);
-        setSelectedShapeIds([id]);
-      });
-    }
-  };
-
   const handleImport = () => {
-    if (!shapesMap) return;
     openImportFilePicker((result: ImportResult) => {
       if (result.ok && result.shapes) {
-        const doc = shapesMap.doc;
-        if (doc) {
-          doc.transact(() => {
-            shapesMap.clear();
-            result.shapes?.forEach((shape) => {
-              shapesMap.set(shape.id, shape);
+        if (shapesMap) {
+          const doc = shapesMap.doc;
+          if (doc) {
+            doc.transact(() => {
+              shapesMap.clear();
             });
-          });
+          }
         }
+        // Clear local media shapes from localStorage
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(`sketchboard-local-shapes-${boardId}`);
+        }
+
+        result.shapes?.forEach((shape) => {
+          saveShape(shapesMap, boardId, shape);
+        });
+
         setImportMsg("Board imported!");
         if (result.boardName && onRename) {
           onRename(result.boardName);
@@ -417,19 +385,6 @@ export function CommandBar({
 
           {activeDropdown === "board" && (
             <div className="absolute top-full right-0 mt-1.5 w-48 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-300">
-              <button
-                onClick={() => {
-                  setShowEmbedDialog(true);
-                  setActiveDropdown(null);
-                }}
-                className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-xs rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
-              >
-                <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                Insert Embeded Media
-              </button>
-              
-              <div className="h-px bg-panel-border my-1" />
-              
               {/* Preferences */}
               <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-muted-foreground">
                 Preferences
@@ -494,12 +449,6 @@ export function CommandBar({
 
       </div>
 
-      {/* Embed insertion modal/dialog */}
-      <EmbedDialog
-        isOpen={showEmbedDialog}
-        onClose={() => setShowEmbedDialog(false)}
-        onInsert={handleInsertEmbed}
-      />
       {/* Import feedback toast */}
       {importMsg && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-200 rounded-lg bg-card px-3 py-1.5 text-xs text-foreground shadow-md border border-panel-border backdrop-blur-md">

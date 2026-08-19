@@ -237,3 +237,29 @@ export async function getUserAssets(): Promise<ActionResult<Array<typeof boardAs
 
   return { success: true, data: assets };
 }
+
+/**
+ * Delete assets uploaded by guest users.
+ */
+export async function deleteGuestAssets(
+  urls: string[]
+): Promise<ActionResult<{ deleted: number }>> {
+  const keysToDelete: string[] = [];
+
+  for (const url of urls) {
+    const key = url.split("/f/")[1] || url.substring(url.lastIndexOf("/") + 1);
+    if (key) {
+      keysToDelete.push(key);
+    }
+  }
+
+  if (keysToDelete.length > 0) {
+    try {
+      await utapi.deleteFiles(keysToDelete);
+    } catch (err) {
+      console.error("[deleteGuestAssets] Failed to delete files from Uploadthing:", err);
+    }
+  }
+
+  return { success: true, data: { deleted: keysToDelete.length } };
+}

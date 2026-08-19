@@ -2,54 +2,181 @@ import * as Y from "yjs";
 import { nanoid } from "nanoid";
 import type { CustomShape } from "@/types/whiteboard";
 import { generateIndex, generateNewTopIndex } from "./fractional-index";
+import { useWhiteboardStore } from "@/store/whiteboard-store";
+import { UPLOAD_LIMITS } from "@/lib/constants";
 
-/**
- * Duplicates the selected shapes, offsetting their positions slightly.
- */
+// ─── Local Media Storage Helpers ─────────────────────────────────────────────
+
+export function getLocalMediaShapes(boardId: string): Record<string, CustomShape> {
+  if (typeof window === "undefined") return {};
+  try {
+    const data = localStorage.getItem(`sketchboard-local-shapes-${boardId}`);
+    return data ? JSON.parse(data) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveLocalMediaShape(boardId: string, shape: CustomShape) {
+  if (typeof window === "undefined") return;
+  try {
+    const shapes = getLocalMediaShapes(boardId);
+    shapes[shape.id] = shape;
+    localStorage.setItem(`sketchboard-local-shapes-${boardId}`, JSON.stringify(shapes));
+  } catch (err) {
+    console.error("Failed to save local media shape:", err);
+  }
+}
+
+export function deleteLocalMediaShape(boardId: string, id: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const shapes = getLocalMediaShapes(boardId);
+    delete shapes[id];
+    localStorage.setItem(`sketchboard-local-shapes-${boardId}`, JSON.stringify(shapes));
+  } catch (err) {
+    console.error("Failed to delete local media shape:", err);
+  }
+}
+
+// ─── Board Size Limit Helpers ────────────────────────────────────────────────
+
+export function getBoardDataSize(shapesMap: Y.Map<CustomShape> | null): number {
+  if (!shapesMap || !shapesMap.doc) return 0;
+  try {
+    const update = Y.encodeStateAsUpdate(shapesMap.doc);
+    return update.byteLength;
+  } catch {
+    return 0;
+  }
+}
+
+const BOARD_SIZE_LIMIT = 10 * 1024 * 1024; // 10 MB in bytes
+
+export function checkBoardLimitExceeded(shapesMap: Y.Map<CustomShape> | null): boolean {
+  const currentSize = getBoardDataSize(shapesMap);
+  return currentSize >= BOARD_SIZE_LIMIT;
+}
+
+// ─── Shape Mutation Wrappers ─────────────────────────────────────────────────
+
+export function saveShape(
+  shapesMap: Y.Map<CustomShape> | null,
+  boardId: string,
+  shape: CustomShape
+): boolean {
+  if (shape.type === "image") {
+    saveLocalMediaShape(boardId, shape);
+    useWhiteboardStore.getState().upsertShape(shape);
+    return true;
+  }
+
+  if (!shapesMap) return false;
+
+  if (checkBoardLimitExceeded(shapesMap)) {
+    const existing = shapesMap.get(shape.id);
+    if (!existing) {
+      alert("Board data limit reached (10 MB). Please delete some shapes before making changes.");
+      return false;
+    }
+  }
+
+  const doc = shapesMap.doc;
+  if (doc) {
+    doc.transact(() => {
+      shapesMap.set(shape.id, shape);
+    });
+  }
+  return true;
+}
+
+export function removeShapes(
+  shapesMap: Y.Map<CustomShape> | null,
+  boardId: string,
+  ids: string[],
+  deleteMedia?: (urls: string[]) => Promise<void>
+) {
+  if (ids.length === 0) return;
+
+  const localMedia = getLocalMediaShapes(boardId);
+  const urlsToDelete: string[] = [];
+
+  ids.forEach((id) => {
+    if (localMedia[id]) {
+      const shape = localMedia[id];
+      if (shape.type === "image" && shape.src) {
+        urlsToDelete.push(shape.src);
+      }
+      deleteLocalMediaShape(boardId, id);
+      useWhiteboardStore.getState().deleteShape(id);
+    } else if (shapesMap) {
+      const shape = shapesMap.get(id);
+      if (shape && shape.type === "image" && shape.src) {
+        urlsToDelete.push(shape.src);
+      }
+    }
+  });
+
+  if (urlsToDelete.length > 0 && deleteMedia) {
+    deleteMedia(urlsToDelete).catch((err) => {
+      console.warn("Failed to delete media assets:", err);
+    });
+  }
+
+  if (shapesMap) {
+    const doc = shapesMap.doc;
+    if (doc) {
+      doc.transact(() => {
+        ids.forEach((id) => {
+          if (shapesMap.has(id)) {
+            shapesMap.delete(id);
+          }
+        });
+      });
+    }
+  }
+}
+
+// ─── Duplication, Arrangement, Alignment ─────────────────────────────────────
+
 export function duplicateShapes(
   ids: string[],
   shapesMap: Y.Map<CustomShape> | null,
+  boardId: string,
   onNewSelection: (newIds: string[]) => void
 ) {
-  if (!shapesMap || ids.length === 0) return;
+  if (ids.length === 0) return;
 
-  const doc = shapesMap.doc;
-  if (!doc) return;
-
-  // Retrieve current shapes
-  const allShapes = Array.from(shapesMap.values());
+  const storeShapes = useWhiteboardStore.getState().shapes;
   const selectedShapes = ids
-    .map((id) => shapesMap.get(id))
+    .map((id) => storeShapes[id])
     .filter((s): s is CustomShape => !!s)
     .sort((a, b) => a.index.localeCompare(b.index));
 
   const newIds: string[] = [];
+  const allShapes = Object.values(storeShapes);
+  let lastIndex = allShapes.reduce((max, s) => (s.index > max ? s.index : max), "");
 
-  doc.transact(() => {
-    let lastIndex = allShapes.reduce((max, s) => (s.index > max ? s.index : max), "");
-    
-    selectedShapes.forEach((shape) => {
-      const nextIndex = generateIndex(lastIndex || null, null);
-      lastIndex = nextIndex;
+  selectedShapes.forEach((shape) => {
+    const nextIndex = generateIndex(lastIndex || null, null);
+    lastIndex = nextIndex;
 
-      const newId = nanoid();
-      newIds.push(newId);
+    const newId = nanoid();
+    newIds.push(newId);
 
-      const duplicated: CustomShape = {
-        ...shape,
-        id: newId,
-        index: nextIndex,
-        x: shape.x + 20,
-        y: shape.y + 20,
-      } as CustomShape;
+    const duplicated: CustomShape = {
+      ...shape,
+      id: newId,
+      index: nextIndex,
+      x: shape.x + 20,
+      y: shape.y + 20,
+    } as CustomShape;
 
-      // Handle duplicate points for drawing shapes
-      if (duplicated.type === "draw" && shape.type === "draw") {
-        duplicated.points = shape.points.map(([px, py, pr]) => [px + 20, py + 20, pr]);
-      }
+    if (duplicated.type === "draw" && shape.type === "draw") {
+      duplicated.points = shape.points.map(([px, py, pr]) => [px + 20, py + 20, pr]);
+    }
 
-      shapesMap.set(newId, duplicated);
-    });
+    saveShape(shapesMap, boardId, duplicated);
   });
 
   if (newIds.length > 0) {
@@ -57,110 +184,96 @@ export function duplicateShapes(
   }
 }
 
-/**
- * Arranges Z-order layers for selected shapes
- */
 export function arrangeShapes(
   ids: string[],
   action: "front" | "back" | "forward" | "backward",
-  shapesMap: Y.Map<CustomShape> | null
+  shapesMap: Y.Map<CustomShape> | null,
+  boardId: string
 ) {
-  if (!shapesMap || ids.length === 0) return;
-  const doc = shapesMap.doc;
-  if (!doc) return;
+  if (ids.length === 0) return;
 
-  const allShapes = Array.from(shapesMap.values()).sort((a, b) => a.index.localeCompare(b.index));
+  const storeShapes = useWhiteboardStore.getState().shapes;
+  const allShapes = Object.values(storeShapes).sort((a, b) => a.index.localeCompare(b.index));
   const selectedIdsSet = new Set(ids);
 
-  doc.transact(() => {
-    if (action === "front") {
-      let highest = allShapes[allShapes.length - 1].index;
-      const selected = allShapes.filter((s) => selectedIdsSet.has(s.id));
-      selected.forEach((shape) => {
-        const nextIndex = generateIndex(highest, null);
-        shapesMap.set(shape.id, { ...shape, index: nextIndex } as CustomShape);
-        highest = nextIndex;
-      });
-    } else if (action === "back") {
-      let lowest = allShapes[0].index;
-      const selected = allShapes.filter((s) => selectedIdsSet.has(s.id)).reverse();
-      selected.forEach((shape) => {
-        const nextIndex = generateIndex(null, lowest);
-        shapesMap.set(shape.id, { ...shape, index: nextIndex } as CustomShape);
-        lowest = nextIndex;
-      });
-    } else if (action === "forward") {
-      // Move each shape past the next unselected shape
-      const selected = allShapes.filter((s) => selectedIdsSet.has(s.id));
-      for (let i = selected.length - 1; i >= 0; i--) {
-        const shape = selected[i];
-        const idx = allShapes.findIndex((s) => s.id === shape.id);
-        if (idx < allShapes.length - 1) {
-          // Find the next unselected sibling shape
-          let nextUnselectedIdx = idx + 1;
-          while (nextUnselectedIdx < allShapes.length && selectedIdsSet.has(allShapes[nextUnselectedIdx].id)) {
-            nextUnselectedIdx++;
-          }
-          if (nextUnselectedIdx < allShapes.length) {
-            const sibling = allShapes[nextUnselectedIdx];
-            const afterSibling = nextUnselectedIdx + 1 < allShapes.length ? allShapes[nextUnselectedIdx + 1].index : null;
-            const nextIndex = generateIndex(sibling.index, afterSibling);
-            shapesMap.set(shape.id, { ...shape, index: nextIndex } as CustomShape);
-            
-            // Re-order locally in our sorted temp array to handle contiguous selection moves
-            allShapes.splice(idx, 1);
-            shape.index = nextIndex;
-            allShapes.splice(nextUnselectedIdx, 0, shape);
-          }
+  if (action === "front") {
+    let highest = allShapes[allShapes.length - 1].index;
+    const selected = allShapes.filter((s) => selectedIdsSet.has(s.id));
+    selected.forEach((shape) => {
+      const nextIndex = generateIndex(highest, null);
+      saveShape(shapesMap, boardId, { ...shape, index: nextIndex } as CustomShape);
+      highest = nextIndex;
+    });
+  } else if (action === "back") {
+    let lowest = allShapes[0].index;
+    const selected = allShapes.filter((s) => selectedIdsSet.has(s.id)).reverse();
+    selected.forEach((shape) => {
+      const nextIndex = generateIndex(null, lowest);
+      saveShape(shapesMap, boardId, { ...shape, index: nextIndex } as CustomShape);
+      lowest = nextIndex;
+    });
+  } else if (action === "forward") {
+    const selected = allShapes.filter((s) => selectedIdsSet.has(s.id));
+    for (let i = selected.length - 1; i >= 0; i--) {
+      const shape = selected[i];
+      const idx = allShapes.findIndex((s) => s.id === shape.id);
+      if (idx < allShapes.length - 1) {
+        let nextUnselectedIdx = idx + 1;
+        while (nextUnselectedIdx < allShapes.length && selectedIdsSet.has(allShapes[nextUnselectedIdx].id)) {
+          nextUnselectedIdx++;
         }
-      }
-    } else if (action === "backward") {
-      // Move each shape before the previous unselected shape
-      const selected = allShapes.filter((s) => selectedIdsSet.has(s.id));
-      for (let i = 0; i < selected.length; i++) {
-        const shape = selected[i];
-        const idx = allShapes.findIndex((s) => s.id === shape.id);
-        if (idx > 0) {
-          let prevUnselectedIdx = idx - 1;
-          while (prevUnselectedIdx >= 0 && selectedIdsSet.has(allShapes[prevUnselectedIdx].id)) {
-            prevUnselectedIdx--;
-          }
-          if (prevUnselectedIdx >= 0) {
-            const sibling = allShapes[prevUnselectedIdx];
-            const beforeSibling = prevUnselectedIdx - 1 >= 0 ? allShapes[prevUnselectedIdx - 1].index : null;
-            const nextIndex = generateIndex(beforeSibling, sibling.index);
-            shapesMap.set(shape.id, { ...shape, index: nextIndex } as CustomShape);
-
-            // Re-order locally in our sorted temp array to handle contiguous selection moves
-            allShapes.splice(idx, 1);
-            shape.index = nextIndex;
-            allShapes.splice(prevUnselectedIdx, 0, shape);
-          }
+        if (nextUnselectedIdx < allShapes.length) {
+          const sibling = allShapes[nextUnselectedIdx];
+          const afterSibling = nextUnselectedIdx + 1 < allShapes.length ? allShapes[nextUnselectedIdx + 1].index : null;
+          const nextIndex = generateIndex(sibling.index, afterSibling);
+          saveShape(shapesMap, boardId, { ...shape, index: nextIndex } as CustomShape);
+          
+          allShapes.splice(idx, 1);
+          shape.index = nextIndex;
+          allShapes.splice(nextUnselectedIdx, 0, shape);
         }
       }
     }
-  });
+  } else if (action === "backward") {
+    const selected = allShapes.filter((s) => selectedIdsSet.has(s.id));
+    for (let i = 0; i < selected.length; i++) {
+      const shape = selected[i];
+      const idx = allShapes.findIndex((s) => s.id === shape.id);
+      if (idx > 0) {
+        let prevUnselectedIdx = idx - 1;
+        while (prevUnselectedIdx >= 0 && selectedIdsSet.has(allShapes[prevUnselectedIdx].id)) {
+          prevUnselectedIdx--;
+        }
+        if (prevUnselectedIdx >= 0) {
+          const sibling = allShapes[prevUnselectedIdx];
+          const beforeSibling = prevUnselectedIdx - 1 >= 0 ? allShapes[prevUnselectedIdx - 1].index : null;
+          const nextIndex = generateIndex(beforeSibling, sibling.index);
+          saveShape(shapesMap, boardId, { ...shape, index: nextIndex } as CustomShape);
+
+          allShapes.splice(idx, 1);
+          shape.index = nextIndex;
+          allShapes.splice(prevUnselectedIdx, 0, shape);
+        }
+      }
+    }
+  }
 }
 
-/**
- * Aligns selected shapes relative to their bounding box.
- */
 export function alignShapes(
   ids: string[],
   axis: "left" | "center" | "right" | "top" | "middle" | "bottom",
-  shapesMap: Y.Map<CustomShape> | null
+  shapesMap: Y.Map<CustomShape> | null,
+  boardId: string
 ) {
-  if (!shapesMap || ids.length < 2) return;
-  const doc = shapesMap.doc;
-  if (!doc) return;
+  if (ids.length < 2) return;
 
+  const storeShapes = useWhiteboardStore.getState().shapes;
   const selectedShapes = ids
-    .map((id) => shapesMap.get(id))
+    .map((id) => storeShapes[id])
     .filter((s): s is CustomShape => !!s);
 
   if (selectedShapes.length < 2) return;
 
-  // Compute union bounding box bounds
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -176,40 +289,34 @@ export function alignShapes(
   const width = maxX - minX;
   const height = maxY - minY;
 
-  doc.transact(() => {
-    selectedShapes.forEach((shape) => {
-      let nextX = shape.x;
-      let nextY = shape.y;
+  selectedShapes.forEach((shape) => {
+    let nextX = shape.x;
+    let nextY = shape.y;
 
-      if (axis === "left") nextX = minX;
-      else if (axis === "right") nextX = maxX - shape.width;
-      else if (axis === "center") nextX = minX + (width - shape.width) / 2;
-      else if (axis === "top") nextY = minY;
-      else if (axis === "bottom") nextY = maxY - shape.height;
-      else if (axis === "middle") nextY = minY + (height - shape.height) / 2;
+    if (axis === "left") nextX = minX;
+    else if (axis === "right") nextX = maxX - shape.width;
+    else if (axis === "center") nextX = minX + (width - shape.width) / 2;
+    else if (axis === "top") nextY = minY;
+    else if (axis === "bottom") nextY = maxY - shape.height;
+    else if (axis === "middle") nextY = minY + (height - shape.height) / 2;
 
-      const deltaX = nextX - shape.x;
-      const deltaY = nextY - shape.y;
+    const deltaX = nextX - shape.x;
+    const deltaY = nextY - shape.y;
 
-      const updated = {
-        ...shape,
-        x: nextX,
-        y: nextY,
-      } as CustomShape;
+    const updated = {
+      ...shape,
+      x: nextX,
+      y: nextY,
+    } as CustomShape;
 
-      // Also adjust individual draw coordinates for drawing shapes
-      if (updated.type === "draw" && shape.type === "draw") {
-        updated.points = shape.points.map(([px, py, pr]) => [px + deltaX, py + deltaY, pr]);
-      }
+    if (updated.type === "draw" && shape.type === "draw") {
+      updated.points = shape.points.map(([px, py, pr]) => [px + deltaX, py + deltaY, pr]);
+    }
 
-      shapesMap.set(shape.id, updated);
-    });
+    saveShape(shapesMap, boardId, updated);
   });
 }
 
-/**
- * Adjusts pan and zoom to fit all shapes within the viewport.
- */
 export function fitToContent(
   shapes: CustomShape[],
   viewportRef: React.RefObject<HTMLDivElement | null>,
@@ -260,34 +367,15 @@ export function fitToContent(
   setPan({ x: newPanX, y: newPanY });
 }
 
-/**
- * Deletes selected shapes from the Yjs map.
- */
-export function deleteShapes(ids: string[], shapesMap: Y.Map<CustomShape> | null) {
-  if (!shapesMap || ids.length === 0) return;
-  const doc = shapesMap.doc;
-  if (doc) {
-    doc.transact(() => {
-      ids.forEach((id) => shapesMap.delete(id));
-    });
-  }
-}
-
-/**
- * Uploads media files and inserts image shapes onto the canvas.
- */
 export async function addImageShapes(
   files: File[],
   canvasPos: { x: number; y: number },
   shapesList: CustomShape[],
   shapesMap: Y.Map<CustomShape> | null,
+  boardId: string,
   uploadMedia: (file: File) => Promise<string>,
   setSelectedShapeIds: (ids: string[]) => void
 ) {
-  if (!shapesMap) return;
-  const doc = shapesMap.doc;
-  if (!doc) return;
-
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     try {
@@ -310,11 +398,11 @@ export async function addImageShapes(
         opacity: 1.0,
         index,
         src: url,
+        fileSize: file.size,
+        mimeType: file.type,
       };
 
-      doc.transact(() => {
-        shapesMap.set(id, newShape);
-      });
+      saveShape(shapesMap, boardId, newShape);
       setSelectedShapeIds([id]);
     } catch (err) {
       console.error("Failed to upload image:", err);
@@ -322,3 +410,68 @@ export async function addImageShapes(
   }
 }
 
+export async function triggerMediaUpload({
+  shapesMap,
+  shapes,
+  boardId,
+  uploadMedia,
+  viewportRef,
+  setSelectedShapeIds,
+  mode,
+}: {
+  shapesMap: Y.Map<CustomShape> | null;
+  shapes: Record<string, CustomShape>;
+  boardId: string;
+  uploadMedia: (file: File) => Promise<string>;
+  viewportRef: React.RefObject<HTMLDivElement | null>;
+  setSelectedShapeIds: (ids: string[]) => void;
+  mode: "guest" | "auth";
+}) {
+  const limit = mode === "auth" ? UPLOAD_LIMITS.AUTH : UPLOAD_LIMITS.GUEST;
+  const currentUsage = Object.values(shapes)
+    .filter((s) => s.type === "image")
+    .reduce((acc, s) => acc + ((s as any).fileSize || 0), 0);
+
+  if (currentUsage >= limit) {
+    const limitMB = limit / (1024 * 1024);
+    alert(`Upload limit exceeded: ${limitMB}MB maximum limit for ${mode} users. Please delete some existing media to free up space.`);
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.multiple = true;
+  input.accept = "image/*,video/*";
+
+  input.onchange = async (e) => {
+    const files = Array.from((e.target as HTMLInputElement).files || []);
+    if (files.length === 0) return;
+
+    const selectedFilesSize = files.reduce((acc, f) => acc + f.size, 0);
+    if (currentUsage + selectedFilesSize > limit) {
+      alert(`Selected files exceed the remaining storage space. Maximum limit: ${limit / (1024 * 1024)}MB.`);
+      return;
+    }
+
+    let cx = 100;
+    let cy = 100;
+    if (viewportRef.current) {
+      const rect = viewportRef.current.getBoundingClientRect();
+      const store = useWhiteboardStore.getState();
+      cx = (rect.width / 2 - store.pan.x) / store.zoom;
+      cy = (rect.height / 2 - store.pan.y) / store.zoom;
+    }
+
+    await addImageShapes(
+      files,
+      { x: cx, y: cy },
+      Object.values(shapes),
+      shapesMap,
+      boardId,
+      uploadMedia,
+      setSelectedShapeIds
+    );
+  };
+
+  input.click();
+}

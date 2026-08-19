@@ -16,10 +16,17 @@ import {
   ChevronUp,
   Frame,
   Eraser,
+  Globe,
+  Image,
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape, ToolType } from "@/types/whiteboard";
 import { cn } from "@/lib/utils";
+import { nanoid } from "nanoid";
+import { generateNewTopIndex } from "@/lib/fractional-index";
+import { SHAPE_DEFAULTS } from "@/lib/constants";
+import { EmbedDialog } from "./embed-dialog";
+import { triggerMediaUpload, saveShape } from "@/lib/board-actions";
 
 // Custom shape icons for the grid popover to match SVG outputs perfectly
 const TriangleIcon = () => (
@@ -71,17 +78,82 @@ const SpeechBubbleIcon = () => (
   </svg>
 );
 
+const RectangleIcon = () => <Square className="h-5 w-5" />;
+const EllipseIcon = () => <Circle className="h-5 w-5" />;
+const ArrowIcon = () => <ArrowRight className="h-5 w-5" />;
+const LineIcon = () => <Minus className="h-5 w-5" />;
+
 interface ToolbarProps {
   shapesMap: Y.Map<CustomShape> | null;
+  viewportRef: React.RefObject<HTMLDivElement | null>;
+  uploadMedia?: (file: File) => Promise<string>;
+  mode?: "guest" | "auth";
+  boardId: string;
 }
 
-export function Toolbar({ shapesMap }: ToolbarProps) {
-  const { activeTool, setActiveTool } = useWhiteboardStore();
+export function Toolbar({ 
+  shapesMap, 
+  viewportRef, 
+  uploadMedia, 
+  mode = "guest", 
+  boardId 
+}: ToolbarProps) {
+  const { activeTool, setActiveTool, setSelectedShapeIds, shapes } = useWhiteboardStore();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const handleToolChange = (tool: ToolType) => {
+    if (tool === "image") {
+      if (uploadMedia) {
+        triggerMediaUpload({
+          shapesMap,
+          shapes,
+          boardId,
+          uploadMedia,
+          viewportRef,
+          setSelectedShapeIds,
+          mode: mode || "guest",
+        });
+      }
+      setShowMoreMenu(false);
+      return;
+    }
     setActiveTool(tool);
     setShowMoreMenu(false);
+  };
+
+  const handleInsertEmbed = (url: string) => {
+    const id = nanoid();
+    const index = generateNewTopIndex(Object.values(shapes));
+    
+    // Place in center of viewport
+    let cx = 100;
+    let cy = 100;
+    if (viewportRef.current) {
+      const rect = viewportRef.current.getBoundingClientRect();
+      const store = useWhiteboardStore.getState();
+      cx = (rect.width / 2 - store.pan.x) / store.zoom - 200;
+      cy = (rect.height / 2 - store.pan.y) / store.zoom - 150;
+    }
+
+    const newShape: CustomShape = {
+      id,
+      type: "embed",
+      x: cx,
+      y: cy,
+      width: 400,
+      height: 300,
+      fill: "transparent",
+      stroke: SHAPE_DEFAULTS.STROKE,
+      strokeWidth: 2,
+      opacity: 1.0,
+      index,
+      src: url,
+    };
+
+    const success = saveShape(shapesMap, boardId, newShape);
+    if (success) {
+      setSelectedShapeIds([id]);
+    }
   };
 
   const tools = [
@@ -89,17 +161,19 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
     { type: "hand" as ToolType, icon: Hand, label: "Hand (H)" },
     { type: "draw" as ToolType, icon: Pencil, label: "Pencil (D)" },
     { type: "eraser" as ToolType, icon: Eraser, label: "Eraser (E)" },
-    { type: "line" as ToolType, icon: Minus, label: "Line (L)" },
-    { type: "arrow" as ToolType, icon: ArrowRight, label: "Arrow (A)" },
-    { type: "rectangle" as ToolType, icon: Square, label: "Rectangle (R)" },
-    { type: "ellipse" as ToolType, icon: Circle, label: "Ellipse (O)" },
     { type: "text" as ToolType, icon: Type, label: "Text (T)" },
     { type: "sticky" as ToolType, icon: StickyNote, label: "Sticky Note (N)" },
     { type: "frame" as ToolType, icon: Frame, label: "Frame (F)" },
+    { type: "embed" as ToolType, icon: Globe, label: "Embed Media" },
+    { type: "image" as ToolType, icon: Image, label: "Upload Media (Ctrl+U)" },
     { type: "laser" as ToolType, icon: Zap, label: "Laser Pointer" },
   ];
 
   const moreShapes = [
+    { type: "line", label: "Line (L)", icon: LineIcon },
+    { type: "arrow", label: "Arrow (A)", icon: ArrowIcon },
+    { type: "rectangle", label: "Rectangle (R)", icon: RectangleIcon },
+    { type: "ellipse", label: "Ellipse (O)", icon: EllipseIcon },
     { type: "triangle", label: "Triangle", icon: TriangleIcon },
     { type: "diamond", label: "Diamond", icon: DiamondIcon },
     { type: "parallelogram", label: "Parallelogram", icon: ParallelogramIcon },
@@ -195,6 +269,15 @@ export function Toolbar({ shapesMap }: ToolbarProps) {
           </div>
         </div>
       </div>
+
+      <EmbedDialog
+        isOpen={activeTool === "embed"}
+        onClose={() => setActiveTool("select")}
+        onInsert={(url) => {
+          handleInsertEmbed(url);
+          setActiveTool("select");
+        }}
+      />
     </>
   );
 }

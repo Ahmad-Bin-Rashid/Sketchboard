@@ -374,8 +374,16 @@ export function generateSVGString(shapes: CustomShape[]): string {
           </g>
         `;
       }
-      case "image":
-        return `<image href="${shape.src}" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" opacity="${opacity}" />`;
+      case "image": {
+        let href = shape.src;
+        if (href.startsWith("local://")) {
+          const localId = href.replace("local://", "");
+          if (typeof window !== "undefined") {
+            href = localStorage.getItem(`sketchboard-local-media-data-${localId}`) ?? href;
+          }
+        }
+        return `<image href="${href}" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" opacity="${opacity}" />`;
+      }
       case "embed":
         return `
           <g opacity="${opacity}">

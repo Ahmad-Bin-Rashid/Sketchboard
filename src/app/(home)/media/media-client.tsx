@@ -318,7 +318,7 @@ export function MediaClient({ initialCloudAssets, initialStorage, isGuest = fals
           {isGuest && localPercent >= 100 && (
             <div className="mt-4 rounded-xl bg-primary-light p-4 text-xs text-primary font-medium flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <span>Local storage limit reached. Sign up or log in to back up your boards to the cloud and upload more media.</span>
-              <div className="flex gap-3 flex-shrink-0">
+              <div className="flex gap-3 shrink-0">
                 <Link href={ROUTES.SIGN_IN} className="underline hover:text-primary-hover">Log In</Link>
                 <Link href={ROUTES.SIGN_UP} className="rounded bg-primary px-2.5 py-1 text-white font-medium hover:bg-primary-hover no-underline">Sign Up</Link>
               </div>
@@ -423,14 +423,16 @@ export function MediaClient({ initialCloudAssets, initialStorage, isGuest = fals
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => handleUploadLocalToCloud(asset)}
-                        disabled={isUploading}
-                        className="rounded-lg bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"
-                        title="Backup to Cloud"
-                      >
-                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      </button>
+                      {!isGuest && (
+                        <button
+                          onClick={() => handleUploadLocalToCloud(asset)}
+                          disabled={isUploading}
+                          className="rounded-lg bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"
+                          title="Backup to Cloud"
+                        >
+                          {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 text-left min-w-0 px-1">

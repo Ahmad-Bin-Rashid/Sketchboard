@@ -77,6 +77,15 @@ export interface StickyShape extends BaseShape {
 export interface ImageShape extends BaseShape {
   type: "image";
   src: string; // CDN or base64 URL
+  fileSize?: number;
+  mimeType?: string;
+  keepRatio?: boolean;
+  crop?: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
 }
 
 export interface EmbedShape extends BaseShape {

@@ -21,25 +21,26 @@ import { RoundedRectangleShapeComponent } from "./rounded-rectangle-shape";
 import { SpeechBubbleShapeComponent } from "./speech-bubble-shape";
 import { FrameShapeComponent } from "./frame-shape";
 import { cn } from "@/lib/utils";
+import { saveShape } from "@/lib/board-actions";
 
 interface ShapeRendererProps {
   shape: CustomShape;
   shapesMap: Y.Map<CustomShape> | null;
+  boardId: string;
   isDraft?: boolean;
 }
 
-export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRendererProps) {
+export function ShapeRenderer({ shape, shapesMap, boardId, isDraft = false }: ShapeRendererProps) {
   const { activeTool, selectedShapeIds, setSelectedShapeIds, addToSelection, shapes } =
     useWhiteboardStore();
 
   const isSelected = selectedShapeIds.includes(shape.id) && !isDraft;
 
-  // Handler to push updates from text/sticky edits back to Yjs Map
+  // Handler to push updates back to Yjs Map or local storage
   const handleUpdate = (id: string, updates: Partial<CustomShape>) => {
-    if (!shapesMap) return;
-    const current = shapesMap.get(id);
+    const current = shapes[id];
     if (current) {
-      shapesMap.set(id, { ...current, ...updates } as CustomShape);
+      saveShape(shapesMap, boardId, { ...current, ...updates } as CustomShape);
     }
   };
 
@@ -173,12 +174,7 @@ export function ShapeRenderer({ shape, shapesMap, isDraft = false }: ShapeRender
     });
     store.setShapes(nextShapes);
 
-    const doc = shapesMap.doc;
-    if (doc) {
-      doc.transact(() => {
-        updatedShapes.forEach((s) => shapesMap.set(s.id, s));
-      });
-    }
+    updatedShapes.forEach((s) => saveShape(shapesMap, boardId, s));
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {

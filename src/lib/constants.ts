@@ -91,10 +91,24 @@ export const TIERS = {
 export const UPLOAD = {
   /** Max file size per image upload (must match Uploadthing router maxFileSize) */
   MAX_FILE_SIZE_MB: 8,
-  ACCEPTED_IMAGE_TYPES: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
+  ACCEPTED_IMAGE_TYPES: [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/svg+xml",
+    "video/mp4",
+    "video/webm",
+    "video/ogg"
+  ],
   /** Max storage space in bytes/MB for local browser fallback */
   MAX_LOCAL_STORAGE_MB: 5,
 } as const;
+
+export const UPLOAD_LIMITS = {
+  GUEST: 5 * 1024 * 1024, // 5MB limit for guest users
+  AUTH: 20 * 1024 * 1024, // 20MB cloud limit for auth users
+} as const;
+
 
 // ─── UI ──────────────────────────────────────────────────────────────────────
 

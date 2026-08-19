@@ -9,6 +9,7 @@ import { AwarenessManager } from "@/lib/sync/awareness";
 import { useConnectionStore, type ConnectionStatus } from "@/lib/sync/connection";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { loadGuestBoard, saveGuestBoard, deleteGuestBoard } from "@/lib/local-board-store";
+import { getLocalMediaShapes } from "@/lib/board-actions";
 import type { CustomShape } from "@/types/whiteboard";
 
 export type WhiteboardMode = "guest" | "auth";
@@ -118,12 +119,14 @@ export function useYjsSync({
       setIsSynced(true);
 
       try {
-        // Hydrate Zustand with initial shapes
+        // Hydrate Zustand with initial shapes merged with local media shapes
         const initialShapes: Record<string, CustomShape> = {};
         map.forEach((shape, id) => {
           initialShapes[id] = shape;
         });
-        useWhiteboardStore.getState().setShapes(initialShapes);
+        const localMedia = getLocalMediaShapes(boardId);
+        const merged = { ...initialShapes, ...localMedia };
+        useWhiteboardStore.getState().setShapes(merged);
 
         // Guest mode: restore local storage snapshot on initial connection if empty
         if (mode === "guest") {
@@ -191,7 +194,9 @@ export function useYjsSync({
       map.forEach((shape, id) => {
         updatedShapes[id] = shape;
       });
-      useWhiteboardStore.getState().setShapes(updatedShapes);
+      const localMedia = getLocalMediaShapes(boardId);
+      const merged = { ...updatedShapes, ...localMedia };
+      useWhiteboardStore.getState().setShapes(merged);
     };
     map.observe(handleMapObserve);
 
