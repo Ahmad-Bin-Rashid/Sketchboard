@@ -12,9 +12,10 @@ import {
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
-import { cn } from "@/lib/utils";
+import { cn, getThemeColor } from "@/lib/utils";
 import { arrangeShapes, saveShape } from "@/lib/board-actions";
 import { PRESET_COLORS, FONT_FAMILIES, SHAPE_DEFAULTS } from "@/lib/constants";
+import { useTheme } from "@/components/theme-provider";
 
 
 interface StylePanelProps {
@@ -24,6 +25,7 @@ interface StylePanelProps {
 
 export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
   const { selectedShapeIds, shapes, setSelectedShapeIds } = useWhiteboardStore();
+  const { resolvedTheme } = useTheme();
 
   // Baseline selection
   const selectedShapes = useMemo(() => {
@@ -32,10 +34,18 @@ export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
       .filter((s): s is CustomShape => !!s);
   }, [selectedShapeIds, shapes]);
 
-  if (selectedShapes.length === 0) return null;
-
   // If multiple are selected, we edit all of them. We use the first selected shape as the UI state baseline.
   const baseline = selectedShapes[0];
+
+  const effectiveStroke = useMemo(() => {
+    return getThemeColor(baseline?.stroke, resolvedTheme) || SHAPE_DEFAULTS.STROKE;
+  }, [baseline?.stroke, resolvedTheme]);
+
+  const effectiveFill = useMemo(() => {
+    return getThemeColor(baseline?.fill, resolvedTheme) || "transparent";
+  }, [baseline?.fill, resolvedTheme]);
+
+  if (selectedShapes.length === 0) return null;
 
   const updateSelectedShapesStyle = (updates: Partial<CustomShape> | ((shape: CustomShape) => Partial<CustomShape>)) => {
     if (selectedShapeIds.length === 0) return;
@@ -79,7 +89,8 @@ export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
             {/* Presets Grid */}
             <div className="grid grid-cols-4 gap-1.5">
               {PRESET_COLORS.map((color) => {
-                const isCurrentStroke = baseline.stroke === color;
+                const resolvedColor = getThemeColor(color, resolvedTheme);
+                const isCurrentStroke = resolvedColor === effectiveStroke;
                 return (
                   <button
                     key={color}
@@ -88,7 +99,7 @@ export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
                       "h-5 w-5 mx-auto rounded-lg border border-panel-border transition hover:scale-105",
                       isCurrentStroke && "ring-2 ring-primary ring-offset-1 ring-offset-panel-bg"
                     )}
-                    style={{ backgroundColor: color }}
+                    style={{ backgroundColor: resolvedColor }}
                     title={color}
                   />
                 );
@@ -100,18 +111,18 @@ export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
               <div className="relative h-7 w-7 rounded-lg border border-panel-border overflow-hidden cursor-pointer shrink-0">
                 <input
                   type="color"
-                  value={baseline.stroke.startsWith("#") ? baseline.stroke : SHAPE_DEFAULTS.STROKE}
+                  value={effectiveStroke.startsWith("#") ? effectiveStroke : SHAPE_DEFAULTS.STROKE}
                   onChange={(e) => updateSelectedShapesStyle({ stroke: e.target.value })}
                   className="absolute inset-0 opacity-0 cursor-pointer h-full w-full"
                 />
                 <div
                   className="h-full w-full"
-                  style={{ backgroundColor: baseline.stroke.startsWith("#") ? baseline.stroke : SHAPE_DEFAULTS.STROKE }}
+                  style={{ backgroundColor: effectiveStroke.startsWith("#") ? effectiveStroke : SHAPE_DEFAULTS.STROKE }}
                 />
               </div>
               <input
                 type="text"
-                value={baseline.stroke}
+                value={effectiveStroke}
                 onChange={(e) => updateSelectedShapesStyle({ stroke: e.target.value })}
                 className="h-7 flex-1 pl-2 text-xs bg-background border border-panel-border rounded-md outline-none focus:border-primary text-foreground font-mono"
                 placeholder="#hex"
@@ -137,7 +148,7 @@ export function StylePanel({ shapesMap, boardId }: StylePanelProps) {
                     onClick={() => updateSelectedShapesStyle({ fill: baseline.stroke })}
                     className={cn(
                       "flex-1 py-1 text-[10px] font-bold rounded-md border border-panel-border bg-background hover:bg-surface-hover transition",
-                      baseline.fill === baseline.stroke && baseline.fill !== "transparent" && "border-primary text-primary"
+                      effectiveFill === effectiveStroke && baseline.fill !== "transparent" && "border-primary text-primary"
                     )}
                   >
                     Solid

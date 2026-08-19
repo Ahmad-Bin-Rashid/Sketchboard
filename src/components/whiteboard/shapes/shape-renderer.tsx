@@ -20,8 +20,9 @@ import { CylinderShapeComponent } from "./cylinder-shape";
 import { RoundedRectangleShapeComponent } from "./rounded-rectangle-shape";
 import { SpeechBubbleShapeComponent } from "./speech-bubble-shape";
 import { FrameShapeComponent } from "./frame-shape";
-import { cn } from "@/lib/utils";
+import { cn, getThemeColor } from "@/lib/utils";
 import { saveShape } from "@/lib/board-actions";
+import { useTheme } from "@/components/theme-provider";
 
 interface ShapeRendererProps {
   shape: CustomShape;
@@ -33,6 +34,19 @@ interface ShapeRendererProps {
 export function ShapeRenderer({ shape, shapesMap, boardId, isDraft = false }: ShapeRendererProps) {
   const { activeTool, selectedShapeIds, setSelectedShapeIds, addToSelection, shapes } =
     useWhiteboardStore();
+
+  const { resolvedTheme } = useTheme();
+
+  const effectiveShape = React.useMemo(() => {
+    const nextShape = { ...shape };
+    if (nextShape.stroke) {
+      nextShape.stroke = getThemeColor(nextShape.stroke, resolvedTheme) as string;
+    }
+    if (nextShape.fill && nextShape.fill !== "transparent") {
+      nextShape.fill = getThemeColor(nextShape.fill, resolvedTheme) as string;
+    }
+    return nextShape;
+  }, [shape, resolvedTheme]);
 
   const isSelected = selectedShapeIds.includes(shape.id) && !isDraft;
 
@@ -194,6 +208,7 @@ export function ShapeRenderer({ shape, shapesMap, boardId, isDraft = false }: Sh
   };
 
   const renderShape = () => {
+    const shape = effectiveShape;
     switch (shape.type) {
       case "rectangle":
         return <RectangleShape shape={shape} />;
