@@ -135,7 +135,7 @@ export const SHAPE_DEFAULTS = {
   DEFAULT_STICKY_HEIGHT: 120,
   DEFAULT_IMAGE_SIZE: 200,
   FONT_SIZE: 20,
-  FONT_FAMILY: '"Shantell Sans", cursive',
+  FONT_FAMILY: 'var(--font-shantell-sans), "Shantell Sans", cursive',
   BORDER_RADIUS: 4,
   SHADOW_BLUR: 8,
   SHADOW_SPREAD: 4,
@@ -155,10 +155,10 @@ export const PRESET_COLORS = [
 ] as const;
 
 export const FONT_FAMILIES = [
-  { name: "Handwriting", value: '"Shantell Sans", cursive' },
-  { name: "Sans Serif", value: '"Inter", sans-serif' },
+  { name: "Handwriting", value: 'var(--font-shantell-sans), "Shantell Sans", cursive' },
+  { name: "Sans Serif", value: 'var(--font-inter), "Inter", sans-serif' },
   { name: "Serif", value: 'Georgia, serif' },
-  { name: "Monospace", value: '"JetBrains Mono", monospace' },
+  { name: "Monospace", value: 'var(--font-jetbrains-mono), "JetBrains Mono", monospace' },
 ] as const;
 
 
