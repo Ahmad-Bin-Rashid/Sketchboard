@@ -15,7 +15,7 @@ interface SelectionBoxProps {
 type HandleType = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
 export function SelectionBox({ shapesMap, boardId }: SelectionBoxProps) {
-  const { selectedShapeIds, shapes, pan, zoom } = useWhiteboardStore();
+  const { selectedShapeIds, shapes, pan, zoom, activeTool } = useWhiteboardStore();
 
   const [isDragging, setIsDragging] = useState(false);
   const [activeHandle, setActiveHandle] = useState<HandleType | null>(null);
@@ -318,6 +318,7 @@ export function SelectionBox({ shapesMap, boardId }: SelectionBoxProps) {
     [isDragging, activeHandle, selectedShapeIds, shapesMap, throttledYjsWrite]
   );
 
+  if (activeTool !== "select") return null;
   if (!boxBounds) return null;
 
   const handleSize = 8 / zoom;

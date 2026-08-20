@@ -12,6 +12,7 @@ import { generateNewTopIndex } from "@/lib/fractional-index";
 import { SHAPE_DEFAULTS } from "@/lib/constants";
 import { addImageShapes, removeShapes, saveShape } from "@/lib/board-actions";
 import { useTheme } from "@/components/theme-provider";
+import { Pencil } from "lucide-react";
 
 
 
@@ -42,6 +43,23 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia, delet
   } = useWhiteboardStore();
 
   const { resolvedTheme } = useTheme();
+  
+  const pencilCursor = React.useMemo(() => {
+    const isDark = resolvedTheme === "dark";
+    const strokeColor = isDark ? "%23ffffff" : "%230f172a";
+    const fillBody = isDark ? "rgba(30, 41, 59, 0.9)" : "rgba(255, 255, 255, 0.9)";
+    const shadowColor = isDark ? "%23000000" : "%23ffffff";
+
+    // Official Lucide 'pencil' paths:
+    // 1. Main body: M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z
+    // 2. Cross line: M15 5l4 4
+    const svg = `%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='${shadowColor}' stroke-width='4.5'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3Cpath d='M15 5l4 4'/%3E%3C/g%3E%3Cg stroke='${strokeColor}' stroke-width='2' fill='${fillBody}'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3Cpath d='M15 5l4 4' fill='none'/%3E%3C/g%3E%3C/svg%3E`;
+
+    // Updated hotspot to 2 22 (the tip of the pencil)
+    return `url("data:image/svg+xml,${svg}") 2 22, auto`;
+  }, [resolvedTheme]);
+
+  
   const defaultStrokeColor = resolvedTheme === "dark" ? "#ffffff" : "#1c1917";
 
   const [isPanning, setIsPanning] = useState(false);
@@ -137,7 +155,7 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia, delet
         activeTool !== "eraser" &&
         activeTool !== "embed";
 
-      if (isShapeTool && e.button === 0 && isCanvasBackground) {
+      if (isShapeTool && e.button === 0) {
         const rect = viewportRef.current.getBoundingClientRect();
         const canvasPos = screenToCanvas(e.clientX, e.clientY, pan, zoom, rect);
         dragStartRef.current = canvasPos;
@@ -436,7 +454,9 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia, delet
         }
 
         setDraftShape(null);
-        setActiveTool("select");
+        if (activeTool !== "draw") {
+          setActiveTool("select");
+        }
       }
     },
     [isPanning, rubberBandRect, shapes, setSelectedShapeIds, setRubberBandRect, draftShape, shapesMap, setDraftShape, setActiveTool, activeTool, isErasing, boardId]
@@ -664,6 +684,25 @@ export function Canvas({ shapesMap, undoManager, viewportRef, uploadMedia, delet
           ? "crosshair"
           : activeTool === "eraser"
           ? "none"
+          : [
+              "draw",
+              "text",
+              "sticky",
+              "frame",
+              "line",
+              "arrow",
+              "rectangle",
+              "ellipse",
+              "triangle",
+              "diamond",
+              "parallelogram",
+              "hexagon",
+              "octagon",
+              "cylinder",
+              "rounded-rectangle",
+              "speech-bubble",
+            ].includes(activeTool)
+          ? pencilCursor
           : "default",
         background: "var(--background)",
       }}
