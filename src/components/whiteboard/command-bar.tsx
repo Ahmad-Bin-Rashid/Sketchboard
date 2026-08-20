@@ -8,7 +8,6 @@ import {
   Copy,
   Trash2,
   Download,
-  Globe,
   Settings,
   Sun,
   Moon,
@@ -24,6 +23,7 @@ import {
   AlignEndVertical,
   Minimize2,
   Upload,
+  Keyboard,
 } from "lucide-react";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
@@ -31,14 +31,10 @@ import {
   duplicateShapes,
   arrangeShapes,
   alignShapes,
-  fitToContent,
   removeShapes,
   saveShape,
 } from "@/lib/board-actions";
 import { exportBoardAsFile, exportBoardAsSVG, exportBoardAsPNG, openImportFilePicker, type ImportResult } from "@/lib/board-export";
-import { generateNewTopIndex } from "@/lib/fractional-index";
-import { nanoid } from "nanoid";
-import { SHAPE_DEFAULTS } from "@/lib/constants";
 import { useTheme } from "@/components/theme-provider";
 
 interface CommandBarProps {
@@ -52,6 +48,7 @@ interface CommandBarProps {
   boardName: string;
   onRename?: (newName: string) => void;
   deleteMedia?: (urls: string[]) => Promise<void>;
+  onOpenKeyboardShortcuts: () => void;
 }
 
 export function CommandBar({
@@ -60,11 +57,11 @@ export function CommandBar({
   canRedo,
   undo,
   redo,
-  viewportRef,
   boardId,
   boardName,
   onRename,
   deleteMedia,
+  onOpenKeyboardShortcuts,
 }: CommandBarProps) {
   const {
     selectedShapeIds,
@@ -385,6 +382,17 @@ export function CommandBar({
 
           {activeDropdown === "board" && (
             <div className="absolute top-full right-0 mt-1.5 w-48 flex flex-col gap-0.5 rounded-xl bg-panel-bg p-1.5 shadow-lg border border-panel-border backdrop-blur-md z-300">
+              <button
+                onClick={() => {
+                  setActiveDropdown(null);
+                  onOpenKeyboardShortcuts();
+                }}
+                className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-xs rounded-lg text-foreground hover:bg-surface-hover transition cursor-pointer"
+              >
+                <Keyboard className="h-3.5 w-3.5 text-muted-foreground" />
+                Keyboard Shortcuts
+              </button>
+              <div className="h-px bg-panel-border my-0.5" />
               {/* Preferences */}
               <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-muted-foreground">
                 Preferences

@@ -38,6 +38,7 @@ import { Canvas } from "./canvas";
 import { Toolbar } from "./toolbar";
 import { CommandBar } from "./command-bar";
 import { StylePanel } from "./style-panel";
+import { KeyboardShortcutsModal } from "./keyboard-shortcuts-modal";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import { useTheme } from "@/components/theme-provider";
 
@@ -78,6 +79,9 @@ export function Whiteboard({
 
   // Show name modal for guests who haven't set a name yet
   const [showNameModal, setShowNameModal] = useState(false);
+
+  // Show keyboard shortcuts modal
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
   // Upload toasts — shown in auth mode when images are uploaded
   const [uploadToasts, setUploadToasts] = useState<ToastEntry[]>([]);
@@ -311,6 +315,7 @@ export function Whiteboard({
         boardName={boardName}
         onRename={handleBoardRename}
         deleteMedia={deleteMedia}
+        onOpenKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
       />
 
       {/* Main floating pill toolbar */}
@@ -341,6 +346,12 @@ export function Whiteboard({
           </div>
         </div>
       )}
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
     </div>
   );
 }

@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import { useWhiteboardStore } from "@/store/whiteboard-store";
 import type { CustomShape } from "@/types/whiteboard";
-import { removeShapes, saveShape, triggerMediaUpload } from "@/lib/board-actions";
+import { removeShapes, saveShape, triggerMediaUpload, duplicateShapes } from "@/lib/board-actions";
+import { generateIndex } from "@/lib/fractional-index";
+import { nanoid } from "nanoid";
 
 export function useWhiteboardKeyboard(
   shapesMap: Y.Map<CustomShape> | null,
@@ -79,6 +81,199 @@ export function useWhiteboardKeyboard(
             setSelectedShapeIds,
             mode: mode || "guest",
           });
+        }
+      }
+
+      // Duplicate (Ctrl/Cmd + D)
+      if (isCmdOrCtrl && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        if (selectedShapeIds.length > 0 && shapesMapRef.current) {
+          duplicateShapes(selectedShapeIds, shapesMapRef.current, boardId, (newIds) => {
+            setSelectedShapeIds(newIds);
+          });
+        }
+      }
+
+      // Copy (Ctrl/Cmd + C)
+      if (isCmdOrCtrl && e.key.toLowerCase() === "c") {
+        if (selectedShapeIds.length > 0) {
+          e.preventDefault();
+          const selectedShapes = selectedShapeIds
+            .map((id) => shapes[id])
+            .filter((s): s is CustomShape => !!s);
+          const data = {
+            type: "sketchboard-shapes",
+            shapes: selectedShapes,
+          };
+          navigator.clipboard.writeText(JSON.stringify(data)).catch((err) => {
+            console.error("Failed to copy shapes to clipboard: ", err);
+          });
+        }
+      }
+
+      // Paste (Ctrl/Cmd + V)
+      if (isCmdOrCtrl && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        navigator.clipboard.readText().then((text) => {
+          try {
+            const data = JSON.parse(text);
+            if (data && data.type === "sketchboard-shapes" && Array.isArray(data.shapes)) {
+              const shapesToPaste = data.shapes as CustomShape[];
+              if (shapesToPaste.length === 0) return;
+
+              const storeShapes = useWhiteboardStore.getState().shapes;
+              const allShapes = Object.values(storeShapes);
+              let lastIndex = allShapes.reduce((max, s) => (s.index > max ? s.index : max), "");
+
+              const newIds: string[] = [];
+              const { setSelectedShapeIds } = useWhiteboardStore.getState();
+
+              // Sort them by index to preserve layering relative order if possible
+              const sortedShapes = [...shapesToPaste].sort((a, b) => a.index.localeCompare(b.index));
+
+              if (shapesMapRef.current) {
+                const map = shapesMapRef.current;
+                const doc = map.doc;
+                const pasteAction = () => {
+                  sortedShapes.forEach((shape) => {
+                    const nextIndex = generateIndex(lastIndex || null, null);
+                    lastIndex = nextIndex;
+
+                    const newId = nanoid();
+                    newIds.push(newId);
+
+                    const duplicated: CustomShape = {
+                      ...shape,
+                      id: newId,
+                      index: nextIndex,
+                      x: shape.x + 20,
+                      y: shape.y + 20,
+                    } as CustomShape;
+
+                    if (duplicated.type === "draw" && shape.type === "draw") {
+                      duplicated.points = shape.points.map(([px, py, pr]) => [px + 20, py + 20, pr]);
+                    }
+
+                    saveShape(map, boardId, duplicated);
+                  });
+
+                  if (newIds.length > 0) {
+                    setSelectedShapeIds(newIds);
+                  }
+                };
+
+                if (doc) {
+                  doc.transact(pasteAction);
+                } else {
+                  pasteAction();
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Failed to parse clipboard data or paste shapes: ", err);
+          }
+        }).catch((err) => {
+          console.error("Failed to read from clipboard: ", err);
+        });
+      }
+
+      // Zoom In (Ctrl/Cmd + Shift + = / +)
+      if (isCmdOrCtrl && e.shiftKey && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        const { zoom, setZoom, pan, setPan } = useWhiteboardStore.getState();
+        const nextZoom = zoom * 1.1;
+        const clampedZoom = Math.max(0.1, Math.min(20, nextZoom));
+        if (viewportRef.current) {
+          const rect = viewportRef.current.getBoundingClientRect();
+          const vx = rect.width / 2;
+          const vy = rect.height / 2;
+          const newPanX = vx - (vx - pan.x) * (clampedZoom / zoom);
+          const newPanY = vy - (vy - pan.y) * (clampedZoom / zoom);
+          setZoom(clampedZoom);
+          setPan({ x: newPanX, y: newPanY });
+        } else {
+          setZoom(clampedZoom);
+        }
+      }
+
+      // Zoom Out (Ctrl/Cmd + Shift + - / _)
+      if (isCmdOrCtrl && e.shiftKey && (e.key === "-" || e.key === "_")) {
+        e.preventDefault();
+        const { zoom, setZoom, pan, setPan } = useWhiteboardStore.getState();
+        const nextZoom = zoom / 1.1;
+        const clampedZoom = Math.max(0.1, Math.min(20, nextZoom));
+        if (viewportRef.current) {
+          const rect = viewportRef.current.getBoundingClientRect();
+          const vx = rect.width / 2;
+          const vy = rect.height / 2;
+          const newPanX = vx - (vx - pan.x) * (clampedZoom / zoom);
+          const newPanY = vy - (vy - pan.y) * (clampedZoom / zoom);
+          setZoom(clampedZoom);
+          setPan({ x: newPanX, y: newPanY });
+        } else {
+          setZoom(clampedZoom);
+        }
+      }
+
+      // Fit to Screen (Ctrl/Cmd + Shift + H)
+      if (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        if (viewportRef.current) {
+          const { setZoom, setPan, shapes } = useWhiteboardStore.getState();
+          const rect = viewportRef.current.getBoundingClientRect();
+          const shapesList = Object.values(shapes);
+
+          const centerOnShapes = (targetZoom: number) => {
+            const vx = rect.width / 2;
+            const vy = rect.height / 2;
+            if (shapesList.length === 0) {
+              setZoom(targetZoom);
+              setPan({ x: 0, y: 0 });
+              return;
+            }
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+            shapesList.forEach((shape) => {
+              if (shape.x < minX) minX = shape.x;
+              if (shape.y < minY) minY = shape.y;
+              if (shape.x + shape.width > maxX) maxX = shape.x + shape.width;
+              if (shape.y + shape.height > maxY) maxY = shape.y + shape.height;
+            });
+            const w = maxX - minX || 1;
+            const h = maxY - minY || 1;
+            const cx = minX + w / 2;
+            const cy = minY + h / 2;
+            const newPanX = vx - cx * targetZoom;
+            const newPanY = vy - cy * targetZoom;
+            setZoom(targetZoom);
+            setPan({ x: newPanX, y: newPanY });
+          };
+
+          if (shapesList.length === 0) {
+            centerOnShapes(1);
+            return;
+          }
+
+          let minX = Infinity;
+          let minY = Infinity;
+          let maxX = -Infinity;
+          let maxY = -Infinity;
+          shapesList.forEach((shape) => {
+            if (shape.x < minX) minX = shape.x;
+            if (shape.y < minY) minY = shape.y;
+            if (shape.x + shape.width > maxX) maxX = shape.x + shape.width;
+            if (shape.y + shape.height > maxY) maxY = shape.y + shape.height;
+          });
+          const w = maxX - minX || 1;
+          const h = maxY - minY || 1;
+          const padding = 64;
+          const targetWidth = Math.max(100, rect.width - padding * 2);
+          const targetHeight = Math.max(100, rect.height - padding * 2);
+          const fitZoom = Math.min(targetWidth / w, targetHeight / h);
+          const clampedZoom = Math.max(0.1, Math.min(2, fitZoom));
+          centerOnShapes(clampedZoom);
         }
       }
 
